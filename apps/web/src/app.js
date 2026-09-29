@@ -6,6 +6,7 @@
 // network, and every kilobyte of framework is a kilobyte that has to be
 // cached and parsed before someone can photograph a receipt.
 
+import { t } from './i18n.js';
 import * as store from './store.js';
 import * as ocr from './ocr.js';
 import {
@@ -179,7 +180,7 @@ async function renderLibrary(query = '') {
   if (docs.length === 0 && query) {
     const none = document.createElement('p');
     none.className = 'hint';
-    none.textContent = `Nothing matches “${query}”.`;
+    none.textContent = t('library.noMatch', { query });
     grid.hidden = false;
     grid.append(none);
     return;
@@ -199,9 +200,9 @@ async function renderLibrary(query = '') {
     const meta = document.createElement('div');
     meta.className = 'card-meta';
     const title = document.createElement('strong');
-    title.textContent = doc.title || 'Untitled scan';
+    title.textContent = doc.title || t('library.untitled');
     const sub = document.createElement('span');
-    const pages = `${doc.pageCount} page${doc.pageCount === 1 ? '' : 's'}`;
+    const pages = t('pages.count', { count: doc.pageCount });
     sub.textContent = `${pages} · ${new Date(doc.updated).toLocaleDateString()}`;
     meta.append(title, sub);
     card.append(meta);
@@ -219,10 +220,7 @@ async function renderNotices() {
   if (damaged.length > 0) {
     const notice = document.createElement('div');
     notice.className = 'notice warn';
-    notice.textContent =
-      `${damaged.length} document${damaged.length === 1 ? '' : 's'} ` +
-      `${damaged.length === 1 ? 'is' : 'are'} missing pages. ` +
-      'The pages that survived are still readable.';
+    notice.textContent = t('library.damaged', { count: damaged.length });
     box.append(notice);
   }
 
@@ -236,14 +234,10 @@ async function renderNotices() {
       ),
     );
     const ask = document.createElement('button');
-    ask.textContent = 'Keep them permanently';
+    ask.textContent = t('storage.keep');
     ask.addEventListener('click', async () => {
       const granted = await store.requestPersistence();
-      toast(
-        granted
-          ? 'Your scans are now kept permanently.'
-          : 'Your browser declined. Installing this app to your home screen usually grants it.',
-      );
+      toast(t(granted ? 'storage.granted' : 'storage.declined'));
       renderNotices();
     });
     notice.append(ask);
@@ -270,9 +264,7 @@ async function startCamera() {
     });
   } catch (error) {
     $('capture-note').textContent =
-      error?.name === 'NotAllowedError'
-        ? 'Camera permission denied — you can still import photos.'
-        : 'No camera available — you can still import photos.';
+      t(error?.name === 'NotAllowedError' ? 'camera.denied' : 'camera.none');
     return;
   }
 
@@ -335,7 +327,7 @@ function startLiveDetection() {
         .finally(() => {
           state.detecting = false;
           const note = $('capture-note');
-          note.textContent = state.liveQuad ? 'Page found — tap to capture' : 'Point at a document';
+          note.textContent = t(state.liveQuad ? 'capture.pageFound' : 'capture.pointAt');
           note.classList.toggle('is-locked', Boolean(state.liveQuad));
         });
     }
@@ -365,7 +357,7 @@ function startLiveDetection() {
 async function capture() {
   const video = $('video');
   if (!video.videoWidth) {
-    toast('The camera is not ready yet.');
+    toast(t('camera.notReady'));
     return;
   }
   const frame = imageDataFrom(video, video.videoWidth, video.videoHeight);
@@ -389,7 +381,7 @@ async function onFilesPicked(files) {
   // not asking to confirm twelve sets of corners — and detection is
   // applied per image without stopping to ask.
   if (images.length === 1) {
-    busy('Opening image…');
+    busy(t('import.opening'));
     await paint();
     try {
       const frame = await blobToImageData(images[0], PAGE_MAX_EDGE);
@@ -397,16 +389,16 @@ async function onFilesPicked(files) {
       await openCrop(frame);
     } catch {
       idle();
-      toast('That file could not be read as an image.');
+      toast(t('import.notImage'));
     }
     return;
   }
 
-  busy(`Importing ${images.length} images…`);
+  busy(t('import.importing', { count: images.length }));
   await paint();
   let added = 0;
   for (const [index, file] of images.entries()) {
-    $('busy-label').textContent = `Importing ${index + 1} of ${images.length}…`;
+    $('busy-label').textContent = t('import.progress', { index: index + 1, count: images.length });
     await paint();
     try {
       const frame = await blobToImageData(file, PAGE_MAX_EDGE);
@@ -428,10 +420,10 @@ async function onFilesPicked(files) {
   idle();
 
   if (added === 0) {
-    toast('None of those files could be read as images.');
+    toast(t('import.noneImages'));
     return;
   }
-  if (added < images.length) toast(`Imported ${added} of ${images.length}.`);
+  if (added < images.length) toast(t('import.partial', { added, count: images.length }));
   openTray();
 }
 
@@ -469,7 +461,7 @@ async function openCrop(frame) {
   };
   show('crop');
   drawCrop();
-  if (!detected) toast('No page outline found — drag the corners to fit.');
+  if (!detected) toast(t('crop.noOutline'));
 }
 
 // A quad set in from the frame's edges, used when detection finds nothing.
@@ -605,7 +597,7 @@ function onCropUp() {
 
 async function confirmCrop() {
   const { corners } = state.crop;
-  busy('Straightening…');
+  busy(t('crop.straightening'));
   await paint();
   try {
     // The `crop` slot stays held. The filter view has a back button that
@@ -617,7 +609,8 @@ async function confirmCrop() {
     idle();
   } catch (error) {
     idle();
-    toast(error?.message ?? 'Those corners do not make a page.');
+    console.error('rectify failed', error);
+    toast(t('crop.badCorners'));
   }
 }
 
@@ -668,7 +661,8 @@ async function renderFilter() {
     canvas.height = result.height;
     canvas.getContext('2d').putImageData(result, 0, 0);
   } catch (error) {
-    toast(error?.message ?? 'That filter could not be applied.');
+    console.error('filter failed', error);
+    toast(t('filter.failed'));
   } finally {
     filterPending = false;
   }
@@ -677,7 +671,7 @@ async function renderFilter() {
 async function confirmFilter() {
   const { source, name, brightness, rotation } = state.filter;
   if (!source) return;
-  busy('Adding page…');
+  busy(t('page.adding'));
   await paint();
   try {
     // The one full-resolution pass. Everything up to here was preview.
@@ -687,7 +681,8 @@ async function confirmFilter() {
     openTray();
   } catch (error) {
     idle();
-    toast(error?.message ?? 'That page could not be added.');
+    console.error('addPage failed', error);
+    toast(t('page.addFailed'));
   } finally {
     // The scan is over either way: a page was added, or it failed and the
     // user is being told so. Nothing downstream refers to these again.
@@ -758,8 +753,8 @@ function updateTrayBadge() {
   $('btn-to-tray').disabled = state.draft.length === 0;
   $('capture-count').textContent =
     state.draft.length === 0
-      ? 'New document'
-      : `${state.draft.length} page${state.draft.length === 1 ? '' : 's'}`;
+      ? t('capture.newDocument')
+      : t('pages.count', { count: state.draft.length });
 }
 
 function openTray() {
@@ -771,8 +766,7 @@ function renderTray() {
   const list = $('tray-list');
   replaceAndReleaseUrls(list);
 
-  $('tray-title').textContent =
-    state.draft.length === 1 ? '1 page' : `${state.draft.length} pages`;
+  $('tray-title').textContent = t('pages.count', { count: state.draft.length });
   $('btn-save').disabled = state.draft.length === 0;
 
   state.draft.forEach((page, index) => {
@@ -780,7 +774,7 @@ function renderTray() {
     item.className = 'tray-item';
 
     const img = document.createElement('img');
-    img.alt = `Page ${index + 1}`;
+    img.alt = t('page.alt', { index: index + 1 });
     img.src = objectUrl(page.thumb);
     item.append(img);
 
@@ -792,9 +786,9 @@ function renderTray() {
     if (state.ocrEnabled) {
       const flag = document.createElement('span');
       flag.className = 'ocr-flag';
-      if (page.ocr) flag.textContent = `${page.ocr.words.length} words`;
-      else if (page.ocrFailed) flag.textContent = 'no text';
-      else flag.textContent = 'reading…';
+      if (page.ocr) flag.textContent = t('ocr.words', { count: page.ocr.words.length });
+      else if (page.ocrFailed) flag.textContent = t('ocr.none');
+      else flag.textContent = t('ocr.reading');
       item.append(flag);
     }
 
@@ -804,21 +798,21 @@ function renderTray() {
     const left = document.createElement('button');
     left.type = 'button';
     left.textContent = '←';
-    left.title = 'Move earlier';
+    left.title = t('tray.moveEarlier');
     left.disabled = index === 0;
     left.addEventListener('click', () => movePage(index, -1));
 
     const right = document.createElement('button');
     right.type = 'button';
     right.textContent = '→';
-    right.title = 'Move later';
+    right.title = t('tray.moveLater');
     right.disabled = index === state.draft.length - 1;
     right.addEventListener('click', () => movePage(index, 1));
 
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.textContent = '✕';
-    remove.title = 'Delete this page';
+    remove.title = t('tray.deletePage');
     remove.addEventListener('click', () => {
       state.draft.splice(index, 1);
       updateTrayBadge();
@@ -846,11 +840,11 @@ async function saveAndExport() {
 
   const pending = state.draft.filter((p) => p.ocrPromise && !p.ocr && !p.ocrFailed);
   if (pending.length > 0) {
-    busy(`Reading text on ${pending.length} page${pending.length === 1 ? '' : 's'}…`);
+    busy(t('ocr.readingPages', { count: pending.length }));
     await Promise.allSettled(pending.map((p) => p.ocrPromise));
   }
 
-  busy('Building PDF…');
+  busy(t('pdf.building'));
   await paint();
 
   const title = $('doc-title').value.trim() || 'Untitled scan';
@@ -900,7 +894,8 @@ async function saveAndExport() {
   } catch (error) {
     idle();
     console.error(error);
-    toast(error?.message ?? 'The export failed. Your pages are still here.');
+    console.error('export failed', error);
+    toast(t('export.failedKept'));
   }
 }
 
@@ -940,26 +935,26 @@ async function offerFile(blob, filename) {
 async function openDocument(id) {
   const doc = await store.getDocument(id);
   if (!doc) {
-    toast('That document is no longer in the library.');
+    toast(t('library.missing'));
     return;
   }
   const pages = await store.getPages(id);
   state.openDoc = { doc, pages };
 
-  $('doc-name').textContent = doc.title || 'Untitled scan';
+  $('doc-name').textContent = doc.title || t('library.untitled');
   const container = $('doc-pages');
   replaceAndReleaseUrls(container);
 
   if (pages.length < doc.pageCount) {
     const notice = document.createElement('div');
     notice.className = 'notice warn';
-    notice.textContent = `${doc.pageCount - pages.length} of this document's pages are missing.`;
+    notice.textContent = t('doc.missingPages', { count: doc.pageCount - pages.length });
     container.append(notice);
   }
 
   for (const [index, page] of pages.entries()) {
     const img = document.createElement('img');
-    img.alt = `Page ${index + 1}`;
+    img.alt = t('page.alt', { index: index + 1 });
     img.loading = 'lazy';
     img.src = objectUrl(page.blob);
     container.append(img);
@@ -971,7 +966,7 @@ async function openDocument(id) {
 async function exportOpenDoc(share) {
   if (!state.openDoc) return;
   const { doc, pages } = state.openDoc;
-  busy('Building PDF…');
+  busy(t('pdf.building'));
   await paint();
   try {
     const pdf = await exportPdf(pages, {
@@ -993,7 +988,8 @@ async function exportOpenDoc(share) {
     }
   } catch (error) {
     idle();
-    toast(error?.message ?? 'The export failed.');
+    console.error('export failed', error);
+    toast(t('export.failed'));
   }
 }
 
@@ -1187,7 +1183,7 @@ async function main() {
   // does not wait at all.
   initScanner().catch((error) => {
     console.error(error);
-    toast('The scanning engine failed to load. Try reloading the page.');
+    toast(t('engine.failed'));
   });
 
   // Four independent reads of the same database. Sequential awaits made

@@ -7,7 +7,7 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL_CACHE = `opendocscan-shell-${VERSION}`;
 const ASSET_CACHE = `opendocscan-assets-${VERSION}`;
 
@@ -35,6 +35,9 @@ const SHELL = [
   'src/styles.css',
   'src/site.css',
   'src/app.js',
+  // app.js imports this at module scope, so a shell without it is not a
+  // degraded offline app — it is one that throws before it renders.
+  'src/i18n.js',
   'src/store.js',
   'src/scanner.js',
   // The worker is a separate document to the browser and is fetched on

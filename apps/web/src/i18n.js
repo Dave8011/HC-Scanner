@@ -1,0 +1,426 @@
+// The strings the scanner produces while it runs.
+//
+// The eight locale pages are separate static documents with their labels
+// already translated — `de.html` ships `Auf ein Dokument richten` in the
+// markup. They all load this same script, so anything the app writes at
+// runtime was English for everyone, and worse, overwrote the German the page
+// had shipped: `busy-label` went from `Arbeitet…` to `Opening image…` on the
+// first import. Half a translation reads as a machine translation, and the
+// half that goes missing is the half people most need to understand.
+//
+// The language is read from `<html lang>` rather than from the URL. It is
+// already correct on all eight pages, it is what a screen reader and the
+// browser's own translation prompt both use, and it does not care whether the
+// address is `/de`, `/de.html` or `/de/`. Parsing the path would have to.
+
+const CATALOG = {
+  en: {
+    'camera.denied': 'Camera permission denied — you can still import photos.',
+    'camera.none': 'No camera available — you can still import photos.',
+    'camera.notReady': 'The camera is not ready yet.',
+    'capture.newDocument': 'New document',
+    'capture.pointAt': 'Point at a document',
+    'capture.pageFound': 'Page found — tap to capture',
+    'import.opening': 'Opening image…',
+    'import.importing': 'Importing {count} images…',
+    'import.progress': 'Importing {index} of {count}…',
+    'import.notImage': 'That file could not be read as an image.',
+    'import.noneImages': 'None of those files could be read as images.',
+    'import.partial': 'Imported {added} of {count}.',
+    'crop.straightening': 'Straightening…',
+    'crop.noOutline': 'No page outline found — drag the corners to fit.',
+    'crop.badCorners': 'Those corners do not make a page.',
+    'filter.failed': 'That filter could not be applied.',
+    'page.adding': 'Adding page…',
+    'page.addFailed': 'That page could not be added.',
+    'page.alt': 'Page {index}',
+    'pages.count': { one: '{count} page', other: '{count} pages' },
+    'tray.moveEarlier': 'Move earlier',
+    'tray.moveLater': 'Move later',
+    'tray.deletePage': 'Delete this page',
+    'ocr.words': { one: '{count} word', other: '{count} words' },
+    'ocr.none': 'no text',
+    'ocr.reading': 'reading…',
+    'ocr.readingPages': {
+      one: 'Reading text on {count} page…',
+      other: 'Reading text on {count} pages…',
+    },
+    'pdf.building': 'Building PDF…',
+    'export.failed': 'The export failed.',
+    'export.failedKept': 'The export failed. Your pages are still here.',
+    'library.untitled': 'Untitled scan',
+    'library.noMatch': 'Nothing matches “{query}”.',
+    'library.missing': 'That document is no longer in the library.',
+    'library.damaged': {
+      one: '{count} document is missing pages. The pages that survived are still readable.',
+      other: '{count} documents are missing pages. The pages that survived are still readable.',
+    },
+    'doc.missingPages': { one: '{count} of this document’s pages is missing.', other: '{count} of this document’s pages are missing.' },
+    'storage.keep': 'Keep them permanently',
+    'storage.granted': 'Your scans are now kept permanently.',
+    'storage.declined': 'Your browser declined. Installing this app to your home screen usually grants it.',
+    'engine.failed': 'The scanning engine failed to load. Try reloading the page.',
+  },
+
+  de: {
+    'camera.denied': 'Kamerazugriff verweigert — Sie können weiterhin Fotos importieren.',
+    'camera.none': 'Keine Kamera verfügbar — Sie können weiterhin Fotos importieren.',
+    'camera.notReady': 'Die Kamera ist noch nicht bereit.',
+    'capture.newDocument': 'Neues Dokument',
+    'capture.pointAt': 'Auf ein Dokument richten',
+    'capture.pageFound': 'Seite erkannt — zum Aufnehmen tippen',
+    'import.opening': 'Bild wird geöffnet…',
+    'import.importing': '{count} Bilder werden importiert…',
+    'import.progress': 'Importiere {index} von {count}…',
+    'import.notImage': 'Diese Datei konnte nicht als Bild gelesen werden.',
+    'import.noneImages': 'Keine dieser Dateien konnte als Bild gelesen werden.',
+    'import.partial': '{added} von {count} importiert.',
+    'crop.straightening': 'Wird begradigt…',
+    'crop.noOutline': 'Keine Seitenkontur gefunden — ziehen Sie die Ecken passend.',
+    'crop.badCorners': 'Diese Ecken ergeben keine Seite.',
+    'filter.failed': 'Dieser Filter konnte nicht angewendet werden.',
+    'page.adding': 'Seite wird hinzugefügt…',
+    'page.addFailed': 'Diese Seite konnte nicht hinzugefügt werden.',
+    'page.alt': 'Seite {index}',
+    'pages.count': { one: '{count} Seite', other: '{count} Seiten' },
+    'tray.moveEarlier': 'Nach vorne verschieben',
+    'tray.moveLater': 'Nach hinten verschieben',
+    'tray.deletePage': 'Diese Seite löschen',
+    'ocr.words': { one: '{count} Wort', other: '{count} Wörter' },
+    'ocr.none': 'kein Text',
+    'ocr.reading': 'wird gelesen…',
+    'ocr.readingPages': {
+      one: 'Text auf {count} Seite wird gelesen…',
+      other: 'Text auf {count} Seiten wird gelesen…',
+    },
+    'pdf.building': 'PDF wird erstellt…',
+    'export.failed': 'Der Export ist fehlgeschlagen.',
+    'export.failedKept': 'Der Export ist fehlgeschlagen. Ihre Seiten sind weiterhin vorhanden.',
+    'library.untitled': 'Unbenannter Scan',
+    'library.noMatch': 'Nichts passt zu „{query}“.',
+    'library.missing': 'Dieses Dokument ist nicht mehr in der Bibliothek.',
+    'library.damaged': {
+      one: 'Bei {count} Dokument fehlen Seiten. Die erhaltenen Seiten sind weiterhin lesbar.',
+      other: 'Bei {count} Dokumenten fehlen Seiten. Die erhaltenen Seiten sind weiterhin lesbar.',
+    },
+    'doc.missingPages': { one: '{count} Seite dieses Dokuments fehlt.', other: '{count} Seiten dieses Dokuments fehlen.' },
+    'storage.keep': 'Dauerhaft behalten',
+    'storage.granted': 'Ihre Scans werden jetzt dauerhaft behalten.',
+    'storage.declined': 'Ihr Browser hat abgelehnt. Wenn Sie diese App zum Startbildschirm hinzufügen, wird es meist erlaubt.',
+    'engine.failed': 'Die Scan-Engine konnte nicht geladen werden. Laden Sie die Seite neu.',
+  },
+
+  es: {
+    'camera.denied': 'Permiso de cámara denegado: aún puedes importar fotos.',
+    'camera.none': 'No hay cámara disponible: aún puedes importar fotos.',
+    'camera.notReady': 'La cámara todavía no está lista.',
+    'capture.newDocument': 'Documento nuevo',
+    'capture.pointAt': 'Apunta a un documento',
+    'capture.pageFound': 'Página detectada: toca para capturar',
+    'import.opening': 'Abriendo imagen…',
+    'import.importing': 'Importando {count} imágenes…',
+    'import.progress': 'Importando {index} de {count}…',
+    'import.notImage': 'Ese archivo no se pudo leer como imagen.',
+    'import.noneImages': 'Ninguno de esos archivos se pudo leer como imagen.',
+    'import.partial': 'Se importaron {added} de {count}.',
+    'crop.straightening': 'Enderezando…',
+    'crop.noOutline': 'No se encontró el contorno de la página: arrastra las esquinas para ajustarlo.',
+    'crop.badCorners': 'Esas esquinas no forman una página.',
+    'filter.failed': 'No se pudo aplicar ese filtro.',
+    'page.adding': 'Añadiendo página…',
+    'page.addFailed': 'No se pudo añadir esa página.',
+    'page.alt': 'Página {index}',
+    'pages.count': { one: '{count} página', other: '{count} páginas' },
+    'tray.moveEarlier': 'Mover antes',
+    'tray.moveLater': 'Mover después',
+    'tray.deletePage': 'Eliminar esta página',
+    'ocr.words': { one: '{count} palabra', other: '{count} palabras' },
+    'ocr.none': 'sin texto',
+    'ocr.reading': 'leyendo…',
+    'ocr.readingPages': {
+      one: 'Leyendo el texto de {count} página…',
+      other: 'Leyendo el texto de {count} páginas…',
+    },
+    'pdf.building': 'Creando el PDF…',
+    'export.failed': 'La exportación falló.',
+    'export.failedKept': 'La exportación falló. Tus páginas siguen aquí.',
+    'library.untitled': 'Escaneo sin título',
+    'library.noMatch': 'Nada coincide con «{query}».',
+    'library.missing': 'Ese documento ya no está en la biblioteca.',
+    'library.damaged': {
+      one: 'A {count} documento le faltan páginas. Las páginas que se conservaron siguen siendo legibles.',
+      other: 'A {count} documentos les faltan páginas. Las páginas que se conservaron siguen siendo legibles.',
+    },
+    'doc.missingPages': { one: 'Falta {count} página de este documento.', other: 'Faltan {count} páginas de este documento.' },
+    'storage.keep': 'Conservar permanentemente',
+    'storage.granted': 'Tus escaneos ahora se conservan permanentemente.',
+    'storage.declined': 'Tu navegador lo rechazó. Añadir esta app a la pantalla de inicio suele concederlo.',
+    'engine.failed': 'No se pudo cargar el motor de escaneo. Prueba a recargar la página.',
+  },
+
+  pt: {
+    'camera.denied': 'Permissão da câmera negada — você ainda pode importar fotos.',
+    'camera.none': 'Nenhuma câmera disponível — você ainda pode importar fotos.',
+    'camera.notReady': 'A câmera ainda não está pronta.',
+    'capture.newDocument': 'Novo documento',
+    'capture.pointAt': 'Aponte para um documento',
+    'capture.pageFound': 'Página encontrada — toque para capturar',
+    'import.opening': 'Abrindo imagem…',
+    'import.importing': 'Importando {count} imagens…',
+    'import.progress': 'Importando {index} de {count}…',
+    'import.notImage': 'Não foi possível ler esse arquivo como imagem.',
+    'import.noneImages': 'Não foi possível ler nenhum desses arquivos como imagem.',
+    'import.partial': '{added} de {count} importados.',
+    'crop.straightening': 'Endireitando…',
+    'crop.noOutline': 'Nenhum contorno de página encontrado — arraste os cantos para ajustar.',
+    'crop.badCorners': 'Esses cantos não formam uma página.',
+    'filter.failed': 'Não foi possível aplicar esse filtro.',
+    'page.adding': 'Adicionando página…',
+    'page.addFailed': 'Não foi possível adicionar essa página.',
+    'page.alt': 'Página {index}',
+    'pages.count': { one: '{count} página', other: '{count} páginas' },
+    'tray.moveEarlier': 'Mover para antes',
+    'tray.moveLater': 'Mover para depois',
+    'tray.deletePage': 'Excluir esta página',
+    'ocr.words': { one: '{count} palavra', other: '{count} palavras' },
+    'ocr.none': 'sem texto',
+    'ocr.reading': 'lendo…',
+    'ocr.readingPages': {
+      one: 'Lendo o texto de {count} página…',
+      other: 'Lendo o texto de {count} páginas…',
+    },
+    'pdf.building': 'Gerando o PDF…',
+    'export.failed': 'A exportação falhou.',
+    'export.failedKept': 'A exportação falhou. Suas páginas continuam aqui.',
+    'library.untitled': 'Digitalização sem título',
+    'library.noMatch': 'Nada corresponde a “{query}”.',
+    'library.missing': 'Esse documento não está mais na biblioteca.',
+    'library.damaged': {
+      one: 'Faltam páginas em {count} documento. As páginas que restaram continuam legíveis.',
+      other: 'Faltam páginas em {count} documentos. As páginas que restaram continuam legíveis.',
+    },
+    'doc.missingPages': { one: 'Falta {count} página deste documento.', other: 'Faltam {count} páginas deste documento.' },
+    'storage.keep': 'Manter permanentemente',
+    'storage.granted': 'Suas digitalizações agora são mantidas permanentemente.',
+    'storage.declined': 'Seu navegador recusou. Adicionar este app à tela de início costuma conceder a permissão.',
+    'engine.failed': 'O mecanismo de digitalização não carregou. Tente recarregar a página.',
+  },
+
+  ja: {
+    'camera.denied': 'カメラの使用が許可されていません。写真の読み込みは引き続き使えます。',
+    'camera.none': '使用できるカメラがありません。写真の読み込みは引き続き使えます。',
+    'camera.notReady': 'カメラの準備がまだできていません。',
+    'capture.newDocument': '新しい書類',
+    'capture.pointAt': '書類に向けてください',
+    'capture.pageFound': 'ページを検出しました。タップして撮影',
+    'import.opening': '画像を開いています…',
+    'import.importing': '{count} 枚の画像を読み込んでいます…',
+    'import.progress': '{count} 枚中 {index} 枚目を読み込み中…',
+    'import.notImage': 'このファイルは画像として読み込めませんでした。',
+    'import.noneImages': 'どのファイルも画像として読み込めませんでした。',
+    'import.partial': '{count} 枚中 {added} 枚を読み込みました。',
+    'crop.straightening': '補正しています…',
+    'crop.noOutline': 'ページの輪郭が見つかりません。四隅をドラッグして合わせてください。',
+    'crop.badCorners': 'この四隅ではページになりません。',
+    'filter.failed': 'このフィルターは適用できませんでした。',
+    'page.adding': 'ページを追加しています…',
+    'page.addFailed': 'このページは追加できませんでした。',
+    'page.alt': '{index} ページ目',
+    'pages.count': { other: '{count} ページ' },
+    'tray.moveEarlier': '前に移動',
+    'tray.moveLater': '後ろに移動',
+    'tray.deletePage': 'このページを削除',
+    'ocr.words': { other: '{count} 語' },
+    'ocr.none': 'テキストなし',
+    'ocr.reading': '読み取り中…',
+    'ocr.readingPages': { other: '{count} ページのテキストを読み取っています…' },
+    'pdf.building': 'PDF を作成しています…',
+    'export.failed': '書き出しに失敗しました。',
+    'export.failedKept': '書き出しに失敗しました。ページはそのまま残っています。',
+    'library.untitled': '無題のスキャン',
+    'library.noMatch': '「{query}」に一致するものはありません。',
+    'library.missing': 'この書類はライブラリにありません。',
+    'library.damaged': {
+      other: '{count} 件の書類でページが欠けています。残っているページは引き続き読めます。',
+    },
+    'doc.missingPages': { other: 'この書類の {count} ページが欠けています。' },
+    'storage.keep': '完全に保存する',
+    'storage.granted': 'スキャンは完全に保存されるようになりました。',
+    'storage.declined': 'ブラウザに拒否されました。ホーム画面に追加すると許可されることが多いです。',
+    'engine.failed': 'スキャンエンジンを読み込めませんでした。ページを再読み込みしてください。',
+  },
+
+  ko: {
+    'camera.denied': '카메라 권한이 거부되었습니다. 사진 가져오기는 계속 사용할 수 있습니다.',
+    'camera.none': '사용할 수 있는 카메라가 없습니다. 사진 가져오기는 계속 사용할 수 있습니다.',
+    'camera.notReady': '카메라가 아직 준비되지 않았습니다.',
+    'capture.newDocument': '새 문서',
+    'capture.pointAt': '문서를 향하게 하세요',
+    'capture.pageFound': '페이지를 찾았습니다. 탭하여 촬영하세요',
+    'import.opening': '이미지를 여는 중…',
+    'import.importing': '이미지 {count}장을 가져오는 중…',
+    'import.progress': '{count}장 중 {index}장 가져오는 중…',
+    'import.notImage': '이 파일은 이미지로 읽을 수 없습니다.',
+    'import.noneImages': '어떤 파일도 이미지로 읽을 수 없습니다.',
+    'import.partial': '{count}장 중 {added}장을 가져왔습니다.',
+    'crop.straightening': '보정하는 중…',
+    'crop.noOutline': '페이지 윤곽을 찾지 못했습니다. 모서리를 끌어 맞춰 주세요.',
+    'crop.badCorners': '이 모서리로는 페이지가 만들어지지 않습니다.',
+    'filter.failed': '이 필터를 적용할 수 없습니다.',
+    'page.adding': '페이지를 추가하는 중…',
+    'page.addFailed': '이 페이지를 추가할 수 없습니다.',
+    'page.alt': '{index}페이지',
+    'pages.count': { other: '{count}페이지' },
+    'tray.moveEarlier': '앞으로 이동',
+    'tray.moveLater': '뒤로 이동',
+    'tray.deletePage': '이 페이지 삭제',
+    'ocr.words': { other: '{count}개 단어' },
+    'ocr.none': '텍스트 없음',
+    'ocr.reading': '읽는 중…',
+    'ocr.readingPages': { other: '{count}페이지의 텍스트를 읽는 중…' },
+    'pdf.building': 'PDF를 만드는 중…',
+    'export.failed': '내보내기에 실패했습니다.',
+    'export.failedKept': '내보내기에 실패했습니다. 페이지는 그대로 남아 있습니다.',
+    'library.untitled': '제목 없는 스캔',
+    'library.noMatch': '‘{query}’와 일치하는 항목이 없습니다.',
+    'library.missing': '이 문서는 더 이상 라이브러리에 없습니다.',
+    'library.damaged': {
+      other: '문서 {count}개에서 페이지가 누락되었습니다. 남아 있는 페이지는 계속 읽을 수 있습니다.',
+    },
+    'doc.missingPages': { other: '이 문서에서 {count}페이지가 누락되었습니다.' },
+    'storage.keep': '영구적으로 보관',
+    'storage.granted': '이제 스캔이 영구적으로 보관됩니다.',
+    'storage.declined': '브라우저가 거부했습니다. 이 앱을 홈 화면에 추가하면 대개 허용됩니다.',
+    'engine.failed': '스캔 엔진을 불러오지 못했습니다. 페이지를 새로고침해 보세요.',
+  },
+
+  'zh-Hans': {
+    'camera.denied': '相机权限被拒绝，你仍然可以导入照片。',
+    'camera.none': '没有可用的相机，你仍然可以导入照片。',
+    'camera.notReady': '相机还没有准备好。',
+    'capture.newDocument': '新文档',
+    'capture.pointAt': '对准一份文档',
+    'capture.pageFound': '已识别到页面，轻点拍摄',
+    'import.opening': '正在打开图片…',
+    'import.importing': '正在导入 {count} 张图片…',
+    'import.progress': '正在导入第 {index} 张，共 {count} 张…',
+    'import.notImage': '这个文件无法作为图片读取。',
+    'import.noneImages': '这些文件都无法作为图片读取。',
+    'import.partial': '已导入 {added} 张，共 {count} 张。',
+    'crop.straightening': '正在校正…',
+    'crop.noOutline': '没有找到页面边框，请拖动四角对齐。',
+    'crop.badCorners': '这四个角无法构成一个页面。',
+    'filter.failed': '无法应用这个滤镜。',
+    'page.adding': '正在添加页面…',
+    'page.addFailed': '无法添加这一页。',
+    'page.alt': '第 {index} 页',
+    'pages.count': { other: '{count} 页' },
+    'tray.moveEarlier': '前移',
+    'tray.moveLater': '后移',
+    'tray.deletePage': '删除这一页',
+    'ocr.words': { other: '{count} 个词' },
+    'ocr.none': '没有文字',
+    'ocr.reading': '正在识别…',
+    'ocr.readingPages': { other: '正在识别 {count} 页上的文字…' },
+    'pdf.building': '正在生成 PDF…',
+    'export.failed': '导出失败。',
+    'export.failedKept': '导出失败，你的页面都还在。',
+    'library.untitled': '未命名扫描',
+    'library.noMatch': '没有找到与“{query}”匹配的内容。',
+    'library.missing': '这个文档已不在文档库中。',
+    'library.damaged': {
+      other: '有 {count} 个文档缺少页面，保留下来的页面仍然可以阅读。',
+    },
+    'doc.missingPages': { other: '这个文档缺少 {count} 页。' },
+    'storage.keep': '永久保留',
+    'storage.granted': '你的扫描件现在会被永久保留。',
+    'storage.declined': '浏览器拒绝了。把这个应用添加到主屏幕通常就会允许。',
+    'engine.failed': '扫描引擎加载失败，请重新加载页面。',
+  },
+
+  'zh-Hant': {
+    'camera.denied': '相機權限被拒絕，你仍然可以匯入照片。',
+    'camera.none': '沒有可用的相機，你仍然可以匯入照片。',
+    'camera.notReady': '相機還沒有準備好。',
+    'capture.newDocument': '新文件',
+    'capture.pointAt': '對準一份文件',
+    'capture.pageFound': '已辨識到頁面，輕點拍攝',
+    'import.opening': '正在開啟圖片…',
+    'import.importing': '正在匯入 {count} 張圖片…',
+    'import.progress': '正在匯入第 {index} 張，共 {count} 張…',
+    'import.notImage': '這個檔案無法當作圖片讀取。',
+    'import.noneImages': '這些檔案都無法當作圖片讀取。',
+    'import.partial': '已匯入 {added} 張，共 {count} 張。',
+    'crop.straightening': '正在校正…',
+    'crop.noOutline': '沒有找到頁面邊框，請拖曳四角對齊。',
+    'crop.badCorners': '這四個角無法構成一個頁面。',
+    'filter.failed': '無法套用這個濾鏡。',
+    'page.adding': '正在加入頁面…',
+    'page.addFailed': '無法加入這一頁。',
+    'page.alt': '第 {index} 頁',
+    'pages.count': { other: '{count} 頁' },
+    'tray.moveEarlier': '前移',
+    'tray.moveLater': '後移',
+    'tray.deletePage': '刪除這一頁',
+    'ocr.words': { other: '{count} 個詞' },
+    'ocr.none': '沒有文字',
+    'ocr.reading': '正在辨識…',
+    'ocr.readingPages': { other: '正在辨識 {count} 頁上的文字…' },
+    'pdf.building': '正在產生 PDF…',
+    'export.failed': '匯出失敗。',
+    'export.failedKept': '匯出失敗，你的頁面都還在。',
+    'library.untitled': '未命名掃描',
+    'library.noMatch': '沒有找到與「{query}」相符的內容。',
+    'library.missing': '這份文件已不在文件庫中。',
+    'library.damaged': {
+      other: '有 {count} 份文件缺少頁面，保留下來的頁面仍然可以閱讀。',
+    },
+    'doc.missingPages': { other: '這份文件缺少 {count} 頁。' },
+    'storage.keep': '永久保留',
+    'storage.granted': '你的掃描檔現在會被永久保留。',
+    'storage.declined': '瀏覽器拒絕了。把這個應用程式加入主畫面通常就會允許。',
+    'engine.failed': '掃描引擎載入失敗，請重新載入頁面。',
+  },
+};
+
+// Exported so `e2e/i18n.spec.mjs` can assert every language carries every key.
+// A language missing a key still renders — it falls through to English — which
+// is the right behaviour at runtime and exactly why it needs a test: a
+// half-translated build looks like a working one.
+export const catalogue = CATALOG;
+
+// `zh-Hans` and `zh-Hant` are script subtags, not languages, and the page
+// declares them exactly as the catalogue keys them. An unknown tag falls back
+// to its base language and then to English, so a future `de-AT` page reads
+// German rather than English.
+function resolve() {
+  const declared = (document.documentElement.lang || 'en').trim();
+  if (CATALOG[declared]) return declared;
+  const base = declared.split('-')[0];
+  return CATALOG[base] ? base : 'en';
+}
+
+export const lang = resolve();
+
+// Japanese, Korean and both Chinese scripts have one form for every count, and
+// `Intl.PluralRules` says so rather than this file having to. It is also why
+// the catalogue above gives them `other` alone: a missing `one` is correct, not
+// an omission.
+const plural = new Intl.PluralRules(lang.startsWith('zh') ? 'zh' : lang);
+
+/**
+ * A translated string. `{name}` placeholders are filled from `params`; a value
+ * that is an object is a plural set chosen by `params.count`.
+ *
+ * A key missing from a language falls through to English rather than rendering
+ * blank — a half-translated build should lose its translation, not its words.
+ */
+export function t(key, params = {}) {
+  let value = CATALOG[lang]?.[key] ?? CATALOG.en[key];
+  if (value === undefined) return key;
+  if (typeof value === 'object') {
+    value = value[plural.select(Number(params.count) || 0)] ?? value.other;
+  }
+  return String(value).replace(/\{(\w+)\}/g, (whole, name) =>
+    params[name] === undefined ? whole : String(params[name]));
+}
