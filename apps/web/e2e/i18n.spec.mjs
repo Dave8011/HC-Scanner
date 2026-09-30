@@ -179,6 +179,38 @@ test('the app does not overwrite the markup’s own translation with English',
     }
   });
 
+test('no English catalogue string is visible anywhere on a locale page',
+  async (page) => {
+    // The general form of the check above, and the one that matters. The first
+    // version of this suite asserted on toasts and five node ids, and a
+    // reviewer still found `Your browser may clear these scans if it runs short
+    // of space.` sitting on the home screen — it was passed to createTextNode,
+    // so neither the sweep that wrote the catalogue nor the test that guarded
+    // it could see it. This walks everything a person can read instead.
+    const { catalogue } = await load('en');
+    // Only entries with no placeholder: an interpolated one renders differently
+    // and comparing the raw template would never match anyway.
+    const english = Object.values(catalogue.en)
+      .flatMap((v) => (typeof v === 'object' ? Object.values(v) : [v]))
+      .filter((v) => !v.includes('{') && v.trim().length > 8);
+
+    for (const [lang, path] of LOCALES) {
+      if (lang === 'en') continue;
+      await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(900);
+      // The storage notice and the status sheet only render once asked for.
+      if (await page.isVisible('#btn-about')) {
+        await page.click('#btn-about');
+        await page.waitForTimeout(700);
+      }
+      const visible = await page.evaluate(() => document.body.innerText);
+      const leaked = english.filter((phrase) => visible.includes(phrase.trim()));
+      if (leaked.length) {
+        throw new Error(`${path} shows English: ${leaked.map((l) => JSON.stringify(l.trim().slice(0, 56))).join(', ')}`);
+      }
+    }
+  });
+
 // ------------------------------------------------------------------- runner
 
 const browser = await chromium.launch({ args: ['--no-sandbox'] });

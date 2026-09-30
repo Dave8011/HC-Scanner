@@ -6,7 +6,7 @@
 // network, and every kilobyte of framework is a kilobyte that has to be
 // cached and parsed before someone can photograph a receipt.
 
-import { t } from './i18n.js';
+import { t, lang } from './i18n.js';
 import * as store from './store.js';
 import * as ocr from './ocr.js';
 import {
@@ -203,7 +203,10 @@ async function renderLibrary(query = '') {
     title.textContent = doc.title || t('library.untitled');
     const sub = document.createElement('span');
     const pages = t('pages.count', { count: doc.pageCount });
-    sub.textContent = `${pages} · ${new Date(doc.updated).toLocaleDateString()}`;
+    // The page's language, not the browser's. With no argument this formats a
+    // German page's dates in whatever locale the browser happens to be set to,
+    // which is how a translated page ends up with an English-looking date.
+    sub.textContent = `${pages} · ${new Date(doc.updated).toLocaleDateString(lang)}`;
     meta.append(title, sub);
     card.append(meta);
 
@@ -228,11 +231,7 @@ async function renderNotices() {
   if (persisted === false) {
     const notice = document.createElement('div');
     notice.className = 'notice';
-    notice.append(
-      document.createTextNode(
-        'Your browser may clear these scans if it runs short of space. ',
-      ),
-    );
+    notice.append(document.createTextNode(t('storage.mayClear')));
     const ask = document.createElement('button');
     ask.textContent = t('storage.keep');
     ask.addEventListener('click', async () => {
@@ -847,7 +846,7 @@ async function saveAndExport() {
   busy(t('pdf.building'));
   await paint();
 
-  const title = $('doc-title').value.trim() || 'Untitled scan';
+  const title = $('doc-title').value.trim() || t('library.untitled');
   const now = Date.now();
   const id = store.newId();
 
@@ -1003,14 +1002,16 @@ async function showAbout() {
   const persisted = await navigator.storage?.persisted?.().catch(() => false);
 
   const rows = [
-    ['Scans stored in', 'This browser, on this device'],
-    ['Kept permanently', persisted ? 'Yes' : 'Not yet — your browser may reclaim the space'],
+    [t('about.storedIn'), t('about.storedInValue')],
+    [t('about.persisted'), persisted ? t('common.yes') : t('about.persistedNo')],
     [
-      'Space used',
-      estimate?.usage != null ? `${(estimate.usage / 1024 / 1024).toFixed(1)} MB` : 'Unknown',
+      t('about.spaceUsed'),
+      estimate?.usage != null
+        ? t('about.megabytes', { size: (estimate.usage / 1024 / 1024).toFixed(1) })
+        : t('about.unknown'),
     ],
-    ['Text recognition', ocr.isEngineLoaded() ? 'Loaded and ready offline' : 'Loads on first use'],
-    ['Works offline', navigator.serviceWorker?.controller ? 'Yes' : 'After the next reload'],
+    [t('about.ocr'), ocr.isEngineLoaded() ? t('about.ocrLoaded') : t('about.ocrLater')],
+    [t('about.offline'), navigator.serviceWorker?.controller ? t('common.yes') : t('about.offlineAfter')],
   ];
 
   for (const [term, value] of rows) {
@@ -1116,7 +1117,12 @@ function wire() {
     await startCamera();
   });
   $('btn-tray-discard').addEventListener('click', async () => {
-    if (state.draft.length > 0 && !confirm(`Discard ${state.draft.length} scanned page(s)?`)) return;
+    if (
+      state.draft.length > 0 &&
+      !confirm(t('tray.discardConfirm', { count: state.draft.length }))
+    ) {
+      return;
+    }
     state.draft = [];
     updateTrayBadge();
     show('library');
@@ -1144,7 +1150,7 @@ function wire() {
   $('btn-doc-pdf').addEventListener('click', () => exportOpenDoc(false));
   $('btn-doc-delete').addEventListener('click', async () => {
     if (!state.openDoc) return;
-    if (!confirm(`Delete “${state.openDoc.doc.title}”? This cannot be undone.`)) return;
+    if (!confirm(t('library.deleteConfirm', { title: state.openDoc.doc.title }))) return;
     await store.deleteDocument(state.openDoc.doc.id);
     state.openDoc = null;
     show('library');
