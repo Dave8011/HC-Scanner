@@ -127,12 +127,42 @@ function replaceAndReleaseUrls(container, children = []) {
 let toastTimer = null;
 function toast(message, ms = 2600) {
   const el = $('toast');
+  // Lift it clear of whichever dock is on screen. The corner editor's is
+  // taller than the capture screen's, and a single constant could only ever
+  // be right for one of them.
+  liftToastAboveDock(el);
   el.textContent = message;
   el.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     el.hidden = true;
   }, ms);
+}
+
+/// Put the toast above whichever dock is on screen.
+///
+/// Measured twice: once now, and once on the next frame. The view is switched
+/// immediately before some of these are raised, and the dock is still settling
+/// when the first measurement runs — the corner editor's carries a line of
+/// instructions that wraps, and it finishes 14px taller than it starts. The
+/// first reading keeps the toast from ever being drawn low; the second corrects
+/// it before anyone could see the difference.
+function liftToastAboveDock(el) {
+  // The toast is markup-wise a sibling of the scanner, not a child of it, so
+  // `position: absolute` resolved against the page body and the offset put it
+  // wherever the card happened to be. Moving it inside #app once — which is
+  // `position: relative` — is what makes the offset mean "above this card's
+  // dock". Done here rather than in the eight locale pages, which each carry
+  // their own copy of this markup.
+  const app = document.getElementById('app');
+  if (app && el.parentElement !== app) app.append(el);
+
+  const measure = () => {
+    const dock = document.querySelector('.view:not([hidden]) .dock');
+    if (dock) el.style.setProperty('--toast-lift', `${dock.offsetHeight}px`);
+  };
+  measure();
+  requestAnimationFrame(measure);
 }
 
 function dismissToast() {
@@ -208,6 +238,17 @@ async function renderLibrary(query = '') {
   $('library-empty').hidden = docs.length > 0 || Boolean(query);
   grid.hidden = docs.length === 0;
 
+  // Nothing scanned yet means nothing to search. The box, its line of
+  // explanation and the storage notice were all present on a first visit,
+  // stacked above the empty state, and on a phone they pushed Import and Scan
+  // most of the way down the card — three blocks about scans, before there
+  // were any. The search field comes back with the first document.
+  // `closest` rather than an id, because this markup is copied into all eight
+  // locale pages and an id would have to be added to each of them.
+  const bare = docs.length === 0 && !query;
+  const searchRow = $('search').closest('.pad');
+  if (searchRow) searchRow.hidden = bare;
+
   if (docs.length === 0 && query) {
     const none = document.createElement('p');
     none.className = 'hint';
@@ -249,6 +290,12 @@ async function renderLibrary(query = '') {
 async function renderNotices() {
   const box = $('library-notices');
   box.replaceChildren();
+
+  // "Your browser may clear these scans if it runs short of space" is a true
+  // sentence about an empty library and a useless one: there is nothing there
+  // to clear, and the offer to keep it permanently is an offer about nothing.
+  // It belongs with the first scan.
+  if ((await store.listDocuments()).length === 0) return;
 
   const damaged = await store.checkIntegrity();
   if (damaged.length > 0) {

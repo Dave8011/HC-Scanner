@@ -690,9 +690,18 @@ body {
 /* --- overlays ------------------------------------------------------------ */
 
 .toast {
-  position: fixed;
+  /* Absolute, not fixed. Fixed was right when the scanner was the whole page;
+     it is a card inside one now, so a viewport-anchored toast floated wherever
+     the card happened to be — on a phone, straight across the dock. #app is
+     the positioned ancestor. */
+  position: absolute;
   left: 50%;
-  bottom: calc(var(--dock-h) + var(--safe-b) + 12px);
+  /* --toast-lift is the height of the dock actually on screen, set when the
+     toast is raised. The flat 88px guess held for the capture dock and not for
+     the corner editor's, which carries a line of instructions above its
+     buttons — so "No page outline found, drag the corners to fit" landed on
+     top of Continue, which is the button it was telling you to press. */
+  bottom: calc(var(--toast-lift, var(--dock-h)) + var(--safe-b) + 12px);
   transform: translateX(-50%);
   background: var(--surface-2);
   border: 1px solid var(--line);
