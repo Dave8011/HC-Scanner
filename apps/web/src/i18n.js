@@ -75,6 +75,7 @@ const CATALOG = {
     'common.yes': "Yes",
     'library.deleteConfirm': "Delete “{title}”? This cannot be undone.",
     'tray.discardConfirm': { one: "Discard {count} scanned page?", other: "Discard {count} scanned pages?" },
+    'ocr.notRead': { one: "Text could not be read on {count} page, so the PDF has no searchable text.", other: "Text could not be read on {count} pages, so the PDF has no searchable text." },
     'engine.failed': 'The scanning engine failed to load. Try reloading the page.',
   },
 
@@ -139,6 +140,7 @@ const CATALOG = {
     'common.yes': "Ja",
     'library.deleteConfirm': "„{title}“ löschen? Das lässt sich nicht rückgängig machen.",
     'tray.discardConfirm': { one: "{count} gescannte Seite verwerfen?", other: "{count} gescannte Seiten verwerfen?" },
+    'ocr.notRead': { one: "Auf {count} Seite konnte kein Text gelesen werden, daher hat das PDF keinen durchsuchbaren Text.", other: "Auf {count} Seiten konnte kein Text gelesen werden, daher hat das PDF keinen durchsuchbaren Text." },
     'engine.failed': 'Die Scan-Engine konnte nicht geladen werden. Laden Sie die Seite neu.',
   },
 
@@ -203,6 +205,7 @@ const CATALOG = {
     'common.yes': "Sí",
     'library.deleteConfirm': "¿Eliminar «{title}»? Esto no se puede deshacer.",
     'tray.discardConfirm': { one: "¿Descartar {count} página escaneada?", other: "¿Descartar {count} páginas escaneadas?" },
+    'ocr.notRead': { one: "No se pudo leer el texto de {count} página, así que el PDF no tiene texto buscable.", other: "No se pudo leer el texto de {count} páginas, así que el PDF no tiene texto buscable." },
     'engine.failed': 'No se pudo cargar el motor de escaneo. Prueba a recargar la página.',
   },
 
@@ -267,6 +270,7 @@ const CATALOG = {
     'common.yes': "Sim",
     'library.deleteConfirm': "Excluir “{title}”? Isso não pode ser desfeito.",
     'tray.discardConfirm': { one: "Descartar {count} página digitalizada?", other: "Descartar {count} páginas digitalizadas?" },
+    'ocr.notRead': { one: "Não foi possível ler o texto de {count} página, então o PDF não tem texto pesquisável.", other: "Não foi possível ler o texto de {count} páginas, então o PDF não tem texto pesquisável." },
     'engine.failed': 'O mecanismo de digitalização não carregou. Tente recarregar a página.',
   },
 
@@ -327,6 +331,7 @@ const CATALOG = {
     'common.yes': "はい",
     'library.deleteConfirm': "「{title}」を削除しますか？元に戻せません。",
     'tray.discardConfirm': { other: "スキャンした {count} ページを破棄しますか？" },
+    'ocr.notRead': { other: "{count} ページのテキストを読み取れなかったため、この PDF は検索できません。" },
     'engine.failed': 'スキャンエンジンを読み込めませんでした。ページを再読み込みしてください。',
   },
 
@@ -387,6 +392,7 @@ const CATALOG = {
     'common.yes': "예",
     'library.deleteConfirm': "‘{title}’을(를) 삭제할까요? 되돌릴 수 없습니다.",
     'tray.discardConfirm': { other: "스캔한 {count}페이지를 버릴까요?" },
+    'ocr.notRead': { other: "{count}페이지의 텍스트를 읽지 못해 이 PDF는 검색할 수 없습니다." },
     'engine.failed': '스캔 엔진을 불러오지 못했습니다. 페이지를 새로고침해 보세요.',
   },
 
@@ -447,6 +453,7 @@ const CATALOG = {
     'common.yes': "是",
     'library.deleteConfirm': "要删除“{title}”吗？此操作无法撤销。",
     'tray.discardConfirm': { other: "要放弃已扫描的 {count} 页吗？" },
+    'ocr.notRead': { other: "有 {count} 页的文字没能识别出来，所以这份 PDF 无法搜索。" },
     'engine.failed': '扫描引擎加载失败，请重新加载页面。',
   },
 
@@ -507,6 +514,7 @@ const CATALOG = {
     'common.yes': "是",
     'library.deleteConfirm': "要刪除「{title}」嗎？此操作無法復原。",
     'tray.discardConfirm': { other: "要捨棄已掃描的 {count} 頁嗎？" },
+    'ocr.notRead': { other: "有 {count} 頁的文字沒能辨識出來，所以這份 PDF 無法搜尋。" },
     'engine.failed': '掃描引擎載入失敗，請重新載入頁面。',
   },
 };

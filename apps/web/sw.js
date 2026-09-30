@@ -7,7 +7,7 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'v7';
+const VERSION = 'v8';
 const SHELL_CACHE = `opendocscan-shell-${VERSION}`;
 const ASSET_CACHE = `opendocscan-assets-${VERSION}`;
 
@@ -77,6 +77,9 @@ self.addEventListener('activate', (event) => {
         if (name.startsWith('opendocscan-') && !keep.has(name)) await caches.delete(name);
       }
       await self.clients.claim();
+      // Not awaited: the page is usable the moment the shell is, and this is
+      // six megabytes.
+      warmOcr();
     })(),
   );
 });
@@ -87,6 +90,48 @@ self.addEventListener('activate', (event) => {
 // worker cannot import from it, so the end-to-end suite asserts the two agree
 // rather than trusting anyone to remember. It is only reachable from the
 // account page; see below.
+// Text recognition, fetched after the shell rather than with it.
+//
+// The FAQ says the app keeps working with no connection "including the text
+// recognition", and it did not: these four files were fetched the first time
+// OCR actually ran, so someone who loaded the page and then lost their
+// connection got a PDF with no text layer — and no warning, because the only
+// sign was a console message nobody sees. The scan itself worked, which is
+// what made it hard to notice.
+//
+// Precaching them in the shell would honour the claim, at the cost of making
+// the first visit six megabytes instead of one — against a 139 KB core, that
+// is the wrong trade for someone who only wanted to look at the page. So the
+// shell installs first and these follow on their own. The claim the FAQ makes
+// is about the state *after* the page has loaded, and a few seconds later that
+// is exactly what holds.
+//
+// The non-SIMD core is deliberately absent: it is a 3.8 MB fallback for
+// engines without WebAssembly SIMD, and every browser that has a service
+// worker has SIMD. It still resolves over the network if it is ever needed.
+const OCR_ASSETS = [
+  'vendor/tesseract/tesseract.esm.min.js',
+  'vendor/tesseract/worker.min.js',
+  'vendor/tesseract/core/tesseract-core-simd-lstm.wasm.js',
+  'vendor/tesseract/lang/eng.traineddata.gz',
+];
+
+async function warmOcr() {
+  try {
+    const cache = await caches.open(ASSET_CACHE);
+    for (const path of OCR_ASSETS) {
+      // One at a time, so this never competes with the page's own requests for
+      // bandwidth on a phone.
+      if (await cache.match(path)) continue;
+      await cache.add(new Request(path, { cache: 'reload' })).catch((error) => {
+        console.warn('[sw] could not warm', path, error);
+      });
+    }
+  } catch (error) {
+    console.warn('[sw] OCR warm-up failed', error);
+  }
+}
+
 const ACCOUNT_ORIGIN = 'https://auth.opendocscan.com';
 const ACCOUNT_PAGES = ['/account', '/account.html'];
 

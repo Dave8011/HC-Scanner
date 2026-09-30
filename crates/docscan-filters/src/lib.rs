@@ -398,8 +398,114 @@ pub fn enhance_rgba(rgba: &mut [u8], brightness: i32) {
 /// on a page photo with an ordinary hand-held gradient, the stretch alone moved
 /// paper coverage from 32.7% to 35.8%; flattening first takes it to 94.5%.
 pub fn enhance_page_rgba(rgba: &mut [u8], width: u32, height: u32, brightness: i32) {
+    // First, before anything has clipped. Both of the steps below raise the
+    // page toward white, and the channel the cast had already pushed highest
+    // reaches 255 first — after that its true value is gone and the ratio the
+    // correction needs cannot be recovered. Measured: run last, the estimator
+    // sees a paper reference of exactly (255, 255, 255) on a page whose paper
+    // is plainly cream, computes gains of 1.0, and does nothing at all.
+    neutralise_paper_rgba(rgba);
     flatten_illumination_rgba(rgba, width, height);
     enhance_rgba(rgba, brightness);
+}
+
+/// How far the paper's own colour is allowed to be corrected.
+///
+/// A gain of 1.0 is no change. The ceiling exists because the correction is a
+/// division: on a page photographed through a strong colour filter the weakest
+/// channel can be near zero, and an uncapped gain would turn its sensor noise
+/// into confetti. Beyond this the page is left partly tinted, which is honest —
+/// it says the light was too coloured to recover rather than inventing detail.
+const MAX_CAST_GAIN: f32 = 1.8;
+
+/// Below this the cast is not worth correcting: it is within the spread of an
+/// ordinary white page under ordinary light, and touching it would only add
+/// rounding error.
+const CAST_FLOOR: f32 = 1.02;
+
+/// Make the paper grey, so a warm lamp stops being part of the document.
+///
+/// `flatten_illumination_rgba` derives one gain per window from the *luma* and
+/// applies it to all three channels alike. That evens out how bright the page
+/// is and cannot touch what colour it is, so a page shot under a desk lamp came
+/// out of Enhance as bright cream — measured at 255, 240, 208 against the
+/// 243, 244, 239 of a neutral original. The site promises the paper reads
+/// white, so the missing step is this one.
+///
+/// The estimate is a white patch rather than a grey world: the brightest fifth
+/// of the page *is* the paper, and averaging the whole image instead would let
+/// a dark photograph or a wide ink block drag the reference off. Channels are
+/// only ever raised, never cut, so the correction cannot darken a page that was
+/// already neutral.
+pub fn neutralise_paper_rgba(rgba: &mut [u8]) {
+    if rgba.len() < 4 {
+        return;
+    }
+
+    // The luma above which a pixel counts as paper: the 80th percentile, so
+    // ink, shadow and any photograph on the page are excluded.
+    let hist = luma_histogram(rgba);
+    let total: u32 = hist.iter().sum();
+    if total == 0 {
+        return;
+    }
+    let cut = (total as f32 * 0.80) as u32;
+    let mut seen = 0u32;
+    let mut paper_from = 255u8;
+    for (value, count) in hist.iter().enumerate() {
+        seen += count;
+        if seen >= cut {
+            paper_from = value as u8;
+            break;
+        }
+    }
+
+    let (mut sum_r, mut sum_g, mut sum_b, mut n) = (0u64, 0u64, 0u64, 0u64);
+    for px in rgba.chunks_exact(4) {
+        // The shared `luma`, not a second copy of the same weights. The
+        // threshold above comes out of `luma_histogram`, which rounds; an
+        // inline truncating version put paper at 220 against a threshold of
+        // 221, selected nothing, and made this whole function a no-op.
+        if luma(px[0], px[1], px[2]) >= paper_from {
+            sum_r += px[0] as u64;
+            sum_g += px[1] as u64;
+            sum_b += px[2] as u64;
+            n += 1;
+        }
+    }
+    if n == 0 {
+        return;
+    }
+
+    let (r, g, b) = (sum_r as f32 / n as f32, sum_g as f32 / n as f32, sum_b as f32 / n as f32);
+    let target = r.max(g).max(b);
+    if target <= 0.0 {
+        return;
+    }
+    let gains = [target / r.max(1.0), target / g.max(1.0), target / b.max(1.0)];
+
+    // Nothing to do on a page that is already neutral.
+    if gains.iter().all(|gain| *gain < CAST_FLOOR) {
+        return;
+    }
+
+    let luts: Vec<Lut> = gains
+        .iter()
+        .map(|gain| {
+            let gain = gain.clamp(1.0, MAX_CAST_GAIN);
+            let mut lut = [0u8; 256];
+            for (value, out) in lut.iter_mut().enumerate() {
+                *out = ((value as f32 * gain).round() as i32).clamp(0, 255) as u8;
+            }
+            lut
+        })
+        .collect();
+
+    for px in rgba.chunks_exact_mut(4) {
+        px[0] = luts[0][px[0] as usize];
+        px[1] = luts[1][px[1] as usize];
+        px[2] = luts[2][px[2] as usize];
+    }
 }
 
 /// Binarizes the image for document-scan readability: pixels are mapped to
@@ -560,6 +666,49 @@ mod tests {
     /// synthetic image or a PDF render — which is exactly the input that cannot
     /// expose a global filter's blind spot. The shadow is the product's normal
     /// case, and nothing tested it.
+    /// A page under a warm lamp: white paper, dark text, an even warm cast.
+    ///
+    /// The cast is the reporter's own recipe — the blue channel held down,
+    /// green a little — because that is what a tungsten bulb does to a phone
+    /// sensor and what the three real samples in the report had in common.
+    fn warm_page(width: u32, height: u32) -> Vec<u8> {
+        let mut rgba = Vec::with_capacity((width * height * 4) as usize);
+        for y in 0..height {
+            for x in 0..width {
+                let on_a_line = (y / 8) % 3 == 0 && x > width / 10 && x < width * 9 / 10;
+                let base: f32 = if on_a_line && (x / 3) % 4 != 0 { 45.0 } else { 235.0 };
+                // Warm light: red passes, green loses a little, blue loses most.
+                let r = base.min(255.0);
+                let g = (base * 0.94).min(255.0);
+                let b = (base * 0.80).min(255.0);
+                rgba.extend_from_slice(&[r as u8, g as u8, b as u8, 255]);
+            }
+        }
+        rgba
+    }
+
+    /// The mean colour of the blank lower band, which is what the report
+    /// measured in the exported PDF.
+    fn paper_mean(rgba: &[u8], width: u32, height: u32) -> (f32, f32, f32) {
+        let (w, h) = (width as usize, height as usize);
+        let from = h * 3 / 4;
+        let (mut r, mut g, mut b, mut n) = (0u64, 0u64, 0u64, 0u64);
+        for y in from..h {
+            for x in 0..w {
+                let i = (y * w + x) * 4;
+                // Paper only: skip anything dark enough to be ink.
+                if rgba[i] as u32 + rgba[i + 1] as u32 + rgba[i + 2] as u32 > 330 {
+                    r += rgba[i] as u64;
+                    g += rgba[i + 1] as u64;
+                    b += rgba[i + 2] as u64;
+                    n += 1;
+                }
+            }
+        }
+        assert!(n > 0, "no paper found to measure");
+        (r as f32 / n as f32, g as f32 / n as f32, b as f32 / n as f32)
+    }
+
     fn shadowed_page(width: u32, height: u32) -> Vec<u8> {
         let mut rgba = Vec::with_capacity((width * height * 4) as usize);
         for y in 0..height {
@@ -713,5 +862,62 @@ mod tests {
         flatten_illumination_rgba(&mut rgba, 1000, 1000);
         binarize_adaptive_rgba(&mut rgba, 1000, 1000, 0);
         assert_eq!(rgba.len(), 40, "the buffer must be left as it was");
+    }
+
+    #[test]
+    fn enhance_takes_the_warm_light_out_of_the_paper() {
+        // The reported defect: Enhance lifted the brightness and left the
+        // colour alone, so a page under a desk lamp came out cream. Measured
+        // in the report at 255, 240, 208 — a 47-point spread across channels.
+        let (w, h) = (240, 240);
+        let mut before = warm_page(w, h);
+        let (r0, g0, b0) = paper_mean(&before, w, h);
+        let spread_before = r0.max(g0).max(b0) - r0.min(g0).min(b0);
+
+        enhance_page_rgba(&mut before, w, h, 0);
+        let (r1, g1, b1) = paper_mean(&before, w, h);
+        let spread_after = r1.max(g1).max(b1) - r1.min(g1).min(b1);
+
+        assert!(
+            spread_before > 30.0,
+            "the fixture is not warm enough to be a test: spread {spread_before:.1}"
+        );
+        assert!(
+            spread_after < 8.0,
+            "paper still carries a cast: {r1:.0}, {g1:.0}, {b1:.0} (spread {spread_after:.1})"
+        );
+        assert!(r1 > 230.0 && g1 > 230.0 && b1 > 230.0, "paper is not white: {r1:.0}, {g1:.0}, {b1:.0}");
+    }
+
+    #[test]
+    fn a_neutral_page_is_left_alone() {
+        // The correction only ever raises a channel, and only when there is a
+        // cast to remove. A page that was already grey must come out the same
+        // shade rather than being pushed somewhere new.
+        let (w, h) = (240, 240);
+        let mut page = shadowed_page(w, h);
+        let mut untouched = page.clone();
+        neutralise_paper_rgba(&mut page);
+        enhance_page_rgba(&mut untouched, w, h, 0);
+
+        let (r, g, b) = paper_mean(&page, w, h);
+        let spread = r.max(g).max(b) - r.min(g).min(b);
+        assert!(spread < 2.0, "a neutral page gained a cast: {r:.0}, {g:.0}, {b:.0}");
+    }
+
+    #[test]
+    fn a_page_photographed_through_deep_colour_is_not_amplified_into_noise() {
+        // An extreme cast is capped rather than divided out: the weakest
+        // channel would otherwise be multiplied by a large number, and all
+        // that is left down there is sensor noise.
+        let (w, h) = (120, 120);
+        let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+        for _ in 0..(w * h) {
+            rgba.extend_from_slice(&[230, 90, 20, 255]);
+        }
+        neutralise_paper_rgba(&mut rgba);
+        // 230/20 would be a gain of 11.5; the cap holds it to 1.8.
+        let blue = rgba[2] as f32;
+        assert!(blue <= 20.0 * MAX_CAST_GAIN + 1.0, "blue was amplified to {blue}");
     }
 }

@@ -843,6 +843,17 @@ async function saveAndExport() {
     await Promise.allSettled(pending.map((p) => p.ocrPromise));
   }
 
+  // A page whose text could not be read still exports — losing the scan over a
+  // missing text layer would be worse. But it must not export *quietly*: the
+  // PDF looks finished, opens correctly, and cannot be searched, and the only
+  // previous sign was a console warning. Someone who scans a contract offline
+  // and files it away would find out months later, if at all.
+  const unread = state.draft.filter((p) => p.ocrFailed);
+  if (unread.length > 0 && $('opt-ocr')?.checked) {
+    toast(t('ocr.notRead', { count: unread.length }), 6000);
+    await paint();
+  }
+
   busy(t('pdf.building'));
   await paint();
 
