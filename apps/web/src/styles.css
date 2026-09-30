@@ -297,7 +297,14 @@ body {
 #video {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  /* Fill the viewfinder rather than fit inside it. A phone's rear camera
+     hands back a portrait frame and this stage is close to square, so
+     `contain` painted the picture at about half the card's width with black
+     down both sides — too small to aim a sheet of paper with. `cover` crops
+     the edges instead, and the shutter still takes the whole frame, so
+     nothing that was cropped from the preview is lost from the scan.
+     `coverRect` in app.js maps the detected outline the same way. */
+  object-fit: cover;
 }
 
 .overlay {

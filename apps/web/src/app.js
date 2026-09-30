@@ -39,6 +39,17 @@ const LIVE_DETECT_INTERVAL_MS = 200;
 // where scanned text keeps looking better, and well short of where a phone
 // tab runs out of memory holding a few of them.
 const PAGE_MAX_EDGE = 2400;
+
+// Longest edge of the frame the shutter hands to the rectifier.
+//
+// Deliberately larger than PAGE_MAX_EDGE, which caps the *finished* page. The
+// sheet is only ever part of what the camera sees, so the pixels that survive
+// into the rectified page are a fraction of this; feeding it 2400 would mean a
+// receipt that fills half the frame arrives at the rectifier with 1200 pixels
+// across and gets upsampled into the 2400 output. Bounded rather than
+// unlimited because one frame at this size is already about 30 MB of
+// ImageData, and a phone holds several while cropping.
+const CAPTURE_MAX_EDGE = 3200;
 const THUMB_EDGE = 400;
 
 // Longest edge of the image the filter screen previews.
@@ -153,6 +164,26 @@ function containRect(srcW, srcH, dstW, dstH) {
   return { x: (dstW - width) / 2, y: (dstH - height) / 2, width, height, scale };
 }
 
+/// The same fit an `object-fit: cover` element uses: fill the box and let the
+/// overflow fall outside it.
+///
+/// Only the live viewfinder wants this. Every other caller of `containRect` is
+/// showing a page that has already been captured, where seeing all of it is
+/// the point. The camera is the opposite case: a phone's rear camera hands
+/// back a portrait frame, the stage is close to square, and `contain` left the
+/// picture sitting in the middle of it about half as wide as the card with
+/// black down both sides — too small to aim with, which is what was reported.
+///
+/// x and y come back negative here, because the scaled frame is larger than
+/// the box. That is what makes the arithmetic at the call site identical: the
+/// overlay canvas clips whatever lands outside it.
+function coverRect(srcW, srcH, dstW, dstH) {
+  const scale = Math.max(dstW / srcW, dstH / srcH);
+  const width = srcW * scale;
+  const height = srcH * scale;
+  return { x: (dstW - width) / 2, y: (dstH - height) / 2, width, height, scale };
+}
+
 function show(view) {
   state.view = view;
   for (const section of document.querySelectorAll('.view')) {
@@ -256,8 +287,14 @@ async function startCamera() {
         // "ideal" rather than "exact": a laptop with only a front camera
         // should still work rather than throwing OverconstrainedError.
         facingMode: { ideal: state.facingMode },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
+        // Ask for the most the camera has, not a broadcast preset. 1920x1080
+        // is about two megapixels, and a shopping receipt that fills half the
+        // viewfinder lands on a quarter of those — which is why small print
+        // came out of the rectifier as a blur while the same receipt imported
+        // from the system camera read cleanly. `ideal` still degrades: a
+        // laptop webcam that has nothing near this simply returns its best.
+        width: { ideal: 3840 },
+        height: { ideal: 2160 },
       },
       audio: false,
     });
@@ -265,6 +302,24 @@ async function startCamera() {
     $('capture-note').textContent =
       t(error?.name === 'NotAllowedError' ? 'camera.denied' : 'camera.none');
     return;
+  }
+
+  // `ideal` is a preference, not a floor: a phone that can shoot 4K may still
+  // hand back 1280x720 because that is what it opened with. Once the track
+  // exists it will say what it is capable of, and that is worth asking for.
+  // Wrapped because getCapabilities is absent on Firefox and applyConstraints
+  // may refuse — in both cases the stream we already have is fine.
+  try {
+    const track = state.camera.getVideoTracks()[0];
+    const caps = track?.getCapabilities?.();
+    if (caps?.width?.max && caps.width.max > (track.getSettings?.().width ?? 0)) {
+      await track.applyConstraints({
+        width: { ideal: caps.width.max },
+        height: { ideal: caps.height?.max ?? undefined },
+      });
+    }
+  } catch {
+    /* keep whatever the camera opened with */
   }
 
   video.srcObject = state.camera;
@@ -334,7 +389,7 @@ function startLiveDetection() {
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (!state.liveQuad) return;
 
-    const fit = containRect(video.videoWidth, video.videoHeight, overlay.width, overlay.height);
+    const fit = coverRect(video.videoWidth, video.videoHeight, overlay.width, overlay.height);
     ctx.beginPath();
     state.liveQuad.forEach((corner, i) => {
       const x = fit.x + corner.x * fit.width;
@@ -359,8 +414,32 @@ async function capture() {
     toast(t('camera.notReady'));
     return;
   }
-  const frame = imageDataFrom(video, video.videoWidth, video.videoHeight);
+  const frame =
+    (await stillFromCamera()) ??
+    imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
   await openCrop(frame);
+}
+
+/// The camera's own photo, rather than a frame lifted out of the preview.
+///
+/// A preview stream is sized for showing on a screen; the still is sized for
+/// the sensor, and on a phone that is the difference between two megapixels
+/// and twelve. `ImageCapture` is how a page asks for one. Safari does not
+/// implement it and Firefox only behind a flag, so this returns null there and
+/// the caller takes the video frame — which is still larger now than the whole
+/// capture used to be.
+async function stillFromCamera() {
+  const track = state.camera?.getVideoTracks?.()[0];
+  if (!track || typeof ImageCapture === 'undefined') return null;
+  try {
+    const photo = await new ImageCapture(track).takePhoto();
+    return await blobToImageData(photo, CAPTURE_MAX_EDGE);
+  } catch {
+    // Some Android cameras advertise ImageCapture and then reject takePhoto
+    // while the torch or focus is mid-change. The preview frame is right
+    // there and is a better answer than an error.
+    return null;
+  }
 }
 
 // --- import ----------------------------------------------------------------
