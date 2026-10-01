@@ -214,7 +214,13 @@ body {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 12px 16px calc(12px + var(--safe-b));
+  /* `--browser-chrome` is how much of the bottom of the window the browser is
+     covering with its own furniture, measured at runtime (see app.js). On iOS
+     Safari the floating address bar sits *over* the page and is not reported by
+     `env(safe-area-inset-bottom)`, which is 0 there outside a home-screen app —
+     so this row was underneath it, with Add page showing a sliver of green and
+     nothing else. Whichever of the two is larger wins; both are 0 on a desktop. */
+  padding: 12px 16px calc(12px + max(var(--safe-b), var(--browser-chrome, 0px)));
   border-top: 1px solid var(--line);
   background: var(--surface);
   flex-wrap: wrap;
@@ -295,6 +301,16 @@ body {
 }
 
 #video {
+  /* Absolutely placed, not a 100%-high grid item. `height: 100%` has to
+     resolve against the stage, and the stage is a flex child with
+     `flex: 1 1 auto` — iOS Safari does not resolve that, so the element fell
+     back to the height its own aspect ratio implied, came out shorter than the
+     stage, and left a black band across the top with the picture below it. The
+     overlay is already `inset: 0`, so this also puts the two in exactly the
+     same box: the detected outline was being drawn into that black band
+     because the mapping assumed a fill that was not happening. */
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   /* Fill the viewfinder rather than fit inside it. A phone's rear camera

@@ -461,10 +461,23 @@ async function capture() {
     toast(t('camera.notReady'));
     return;
   }
-  const frame =
-    (await stillFromCamera()) ??
-    imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
+  let frame = await stillFromCamera();
+  if (!frame) {
+    frame = imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
+    noteCapture('frame', video.videoWidth, video.videoHeight, frame.width, frame.height);
+  }
   await openCrop(frame);
+}
+
+/// What the last press of the shutter actually produced.
+///
+/// Asked for by a reporter testing on real hardware, and the right thing to
+/// ask for: `ImageCapture` is absent on Safari and can throw on Android even
+/// where it exists, and when it does the fallback looks identical from the
+/// outside — the scan simply comes out soft. From a phone there is no console
+/// to check. This is the answer, in the panel behind the "?".
+function noteCapture(source, rawWidth, rawHeight, usedWidth, usedHeight) {
+  state.lastCapture = { source, rawWidth, rawHeight, usedWidth, usedHeight };
 }
 
 /// The camera's own photo, rather than a frame lifted out of the preview.
@@ -480,7 +493,19 @@ async function stillFromCamera() {
   if (!track || typeof ImageCapture === 'undefined') return null;
   try {
     const photo = await new ImageCapture(track).takePhoto();
-    return await blobToImageData(photo, CAPTURE_MAX_EDGE);
+    // Decoded here rather than through `blobToImageData` so the sensor's own
+    // dimensions can be recorded before the cap is applied. On a phone that is
+    // the difference between "the still worked and gave twelve megapixels" and
+    // "it threw and you are looking at a preview frame", and from the outside
+    // the two produce the same screen.
+    const bitmap = await createImageBitmap(photo);
+    try {
+      const frame = imageDataFrom(bitmap, bitmap.width, bitmap.height, CAPTURE_MAX_EDGE);
+      noteCapture('still', bitmap.width, bitmap.height, frame.width, frame.height);
+      return frame;
+    } finally {
+      bitmap.close();
+    }
   } catch {
     // Some Android cameras advertise ImageCapture and then reject takePhoto
     // while the torch or focus is mid-change. The preview frame is right
@@ -1006,27 +1031,50 @@ async function saveAndExport() {
       title,
     });
 
-    // Written before the file is offered, so a share sheet dismissed or a
-    // download cancelled still leaves the document in the library.
-    await store.saveDocument(
-      {
-        id,
-        title,
-        created: now,
-        updated: now,
-        pageCount: pages.length,
-        text: pages.map((p) => p.text).filter(Boolean).join(' '),
-        thumb: pages[0].thumb,
-      },
-      pages,
-    );
+    // Attempted before the file is offered, so a share sheet dismissed or a
+    // download cancelled still leaves the document in the library — but not
+    // *required*, which it used to be. A throw here jumped to the catch and
+    // discarded a PDF that was already built and sitting in memory. A private
+    // window refuses to store a Blob at all, so the people most likely to be
+    // scanning something sensitive were the ones who walked away with nothing.
+    let kept = true;
+    try {
+      await store.saveDocument(
+        {
+          id,
+          title,
+          created: now,
+          updated: now,
+          pageCount: pages.length,
+          text: pages.map((p) => p.text).filter(Boolean).join(' '),
+          thumb: pages[0].thumb,
+        },
+        pages,
+      );
+    } catch (error) {
+      kept = false;
+      console.error('could not keep this scan in the library', error);
+    }
 
     idle();
-    state.draft = [];
-    updateTrayBadge();
-    await renderLibrary();
+    if (kept) {
+      // Only when it is really in the library. Clearing the tray on a failed
+      // save would take away the pages as well as the record of them, and the
+      // export they could retry from.
+      state.draft = [];
+      updateTrayBadge();
+      await renderLibrary();
+    }
+
     await offerFile(pdf, `${safeFileName(title)}.pdf`);
-    await openDocument(id);
+
+    if (kept) {
+      await openDocument(id);
+    } else {
+      // Long: it is the only notice that this scan exists nowhere but in the
+      // file they were just handed.
+      toast(t('export.notKept'), 7000);
+    }
   } catch (error) {
     idle();
     console.error(error);
@@ -1131,6 +1179,20 @@ async function exportOpenDoc(share) {
 
 // --- about -----------------------------------------------------------------
 
+/// "Camera photo &middot; 4032 x 3024" — or what it fell back to, and why that matters.
+function describeLastCapture() {
+  const last = state.lastCapture;
+  if (!last) return t('about.captureNone');
+  const source = t(last.source === 'still' ? 'about.captureStill' : 'about.captureFrame');
+  const raw = `${last.rawWidth} \u00d7 ${last.rawHeight}`;
+  // Only when the cap actually bit, so the common case stays one number.
+  const used =
+    last.usedWidth === last.rawWidth && last.usedHeight === last.rawHeight
+      ? ''
+      : ` \u2192 ${last.usedWidth} \u00d7 ${last.usedHeight}`;
+  return `${source} \u00b7 ${raw}${used}`;
+}
+
 async function showAbout() {
   const facts = $('about-facts');
   facts.replaceChildren();
@@ -1149,6 +1211,7 @@ async function showAbout() {
     ],
     [t('about.ocr'), ocr.isEngineLoaded() ? t('about.ocrLoaded') : t('about.ocrLater')],
     [t('about.offline'), navigator.serviceWorker?.controller ? t('common.yes') : t('about.offlineAfter')],
+    [t('about.lastCapture'), describeLastCapture()],
   ];
 
   for (const [term, value] of rows) {
@@ -1352,4 +1415,29 @@ async function main() {
   }
 }
 
+/// How much of the bottom of the window the browser is covering.
+///
+/// iOS Safari's floating address bar is painted over the page rather than
+/// beside it, and it is not part of `env(safe-area-inset-bottom)` — that is 0
+/// in a normal tab and only becomes non-zero in a home-screen app. So the only
+/// thing that knows where the visible area really ends is the visual viewport,
+/// and the difference between it and `innerHeight` is the furniture.
+///
+/// Everything here degrades to 0: a browser with no `visualViewport`, or one
+/// whose chrome does not overlap, leaves the dock padded exactly as before.
+function trackBrowserChrome() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const measure = () => {
+    const covered = window.innerHeight - (vv.height + vv.offsetTop);
+    const px = Math.max(0, Math.round(covered));
+    document.documentElement.style.setProperty('--browser-chrome', `${px}px`);
+  };
+  measure();
+  vv.addEventListener('resize', measure);
+  vv.addEventListener('scroll', measure);
+  window.addEventListener('orientationchange', () => setTimeout(measure, 300));
+}
+
+trackBrowserChrome();
 main();

@@ -7,14 +7,13 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'v8';
+const VERSION = 'f4110ad0c6c6';
 const SHELL_CACHE = `opendocscan-shell-${VERSION}`;
 const ASSET_CACHE = `opendocscan-assets-${VERSION}`;
 
 // The smallest set that gets someone from a cold start to a finished scan
 // with no network. Deliberately excludes the OCR engine, which is ~6MB —
-// that is fetched the first time text recognition actually runs, and cached
-// from then on.
+// see OCR_ASSETS below, which fetches it after the shell rather than never.
 const SHELL = [
   './',
   'index.html',

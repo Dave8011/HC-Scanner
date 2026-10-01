@@ -210,6 +210,88 @@ test('the Scan button is on the first screen', async (page) => {
   }
 });
 
+test('the viewfinder fills the stage, not just its width', async (page) => {
+  // `object-fit: cover` fixed the left and right black bars and left a band
+  // across the top: `height: 100%` has to resolve against a flex child, which
+  // iOS Safari does not do, so the element fell back to its own aspect ratio
+  // and came out short. The overlay is `inset: 0`, so the two boxes also have
+  // to agree or the detected outline is drawn where the picture is not — which
+  // is what put the blue quad inside the black band.
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.click('#btn-new-scan');
+  await page.waitForFunction(() => document.getElementById('video')?.videoWidth > 0,
+                             { timeout: 15_000 });
+  await page.waitForTimeout(700);
+
+  const box = await page.evaluate(() => {
+    const v = document.getElementById('video');
+    const stage = v.closest('.stage');
+    const o = document.getElementById('overlay');
+    const r = (el) => { const b = el.getBoundingClientRect();
+                        return { t: Math.round(b.top), l: Math.round(b.left),
+                                 w: Math.round(b.width), h: Math.round(b.height) }; };
+    return { position: getComputedStyle(v).position, video: r(v), stage: r(stage), overlay: r(o) };
+  });
+  if (box.position !== 'absolute') {
+    throw new Error(`#video is position: ${box.position}; a percentage height will not resolve here`);
+  }
+  const gap = Math.abs(box.video.h - box.stage.h) + Math.abs(box.video.w - box.stage.w);
+  if (gap > 2) {
+    throw new Error(`the picture does not fill the stage: video ${box.video.w}x${box.video.h} in ${box.stage.w}x${box.stage.h}`);
+  }
+  const drift = Math.abs(box.video.t - box.overlay.t) + Math.abs(box.video.l - box.overlay.l);
+  if (drift > 2) {
+    throw new Error('the overlay and the picture are in different boxes, so the outline will be drawn off the page');
+  }
+});
+
+test('the bottom row clears whatever the browser is covering', async (page) => {
+  // iOS Safari's floating address bar is painted over the page and is not in
+  // `env(safe-area-inset-bottom)`, which is 0 in a normal tab. The only thing
+  // that knows is the visual viewport, so app.js measures it into
+  // `--browser-chrome`. Headless Chromium has no such bar, so this sets the
+  // variable itself: what is being tested is that the dock answers to it.
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(900);
+  const padding = await page.evaluate(() => {
+    const dock = document.querySelector('.view:not([hidden]) .dock');
+    const read = () => parseFloat(getComputedStyle(dock).paddingBottom);
+    const before = read();
+    document.documentElement.style.setProperty('--browser-chrome', '64px');
+    const after = read();
+    document.documentElement.style.removeProperty('--browser-chrome');
+    return { before, after };
+  });
+  if (!(padding.after >= padding.before + 50)) {
+    throw new Error(
+      `the dock ignores the browser's furniture: ${padding.before}px -> ${padding.after}px ` +
+      'with 64px reported covered');
+  }
+});
+
+test('the header fits the screen it is on', async (page) => {
+  // "Open the scanner" was wrapping to two lines; stopping that made the row
+  // wider than its container and the last letter was cut off at the screen
+  // edge instead.
+  // At an iPhone's width rather than the suite's Pixel profile: 412px has room
+  // and 390 does not, so testing at the wider one proves nothing.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(700);
+  const fit = await page.evaluate(() => {
+    const wrap = document.querySelector('.site-header .site-wrap');
+    const cs = getComputedStyle(wrap), wr = wrap.getBoundingClientRect();
+    const cta = document.querySelector('.site-header .site-cta');
+    const cr = cta.getBoundingClientRect();
+    return { over: cr.right - (wr.right - parseFloat(cs.paddingRight)),
+             height: cr.height, label: cta.textContent.trim(),
+             hscroll: document.documentElement.scrollWidth - window.innerWidth };
+  });
+  if (fit.over > 2) throw new Error(`the call to action runs ${Math.round(fit.over)}px past the gutter`);
+  if (fit.height > 44) throw new Error(`"${fit.label}" is wrapping again (${Math.round(fit.height)}px tall)`);
+  if (fit.hscroll > 0) throw new Error('the page scrolls sideways');
+});
+
 // ------------------------------------------------------------------- runner
 
 const browser = await chromium.launch({
