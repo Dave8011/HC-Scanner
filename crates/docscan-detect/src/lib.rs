@@ -63,6 +63,24 @@ const MIN_QUAD_AREA_FRACTION: f64 = 0.02;
 /// across the frame is judged by its shape and not by its orientation.
 const MIN_QUAD_SIDE_RATIO: f64 = 0.125;
 
+/// How square a corner has to be before the quad can be a photographed
+/// rectangle.
+///
+/// A rectangle photographed from any angle at all still projects to a convex
+/// quadrilateral whose corners are corners. What came back from real
+/// photographs instead was a long thin wedge with three of its four points
+/// bunched along one edge — geometrically a triangle, with one "corner" of
+/// about 175 degrees. The side-ratio test above does not see it: a wedge
+/// spanning the frame can easily have its short side at an eighth of its long
+/// one and pass.
+///
+/// The bounds are wide on purpose. A page photographed at a steep angle is a
+/// real case and reaches perhaps 50 degrees at its sharpest corner; these sit
+/// well outside that, so what they exclude is degeneracy rather than
+/// perspective.
+const MIN_CORNER_DEGREES: f64 = 35.0;
+const MAX_CORNER_DEGREES: f64 = 145.0;
+
 /// Finds the quadrilateral of the largest document-like region in `img`.
 ///
 /// Returns its four corners ordered top-left, top-right, bottom-right,
@@ -119,7 +137,52 @@ fn is_page_shaped(quad: &[Point; 4]) -> bool {
 
     // A quad with a zero-length side is not merely thin, it is degenerate,
     // and the projection that would flatten it does not exist.
-    longest > 0.0 && shortest / longest >= MIN_QUAD_SIDE_RATIO
+    if longest <= 0.0 || shortest / longest < MIN_QUAD_SIDE_RATIO {
+        return false;
+    }
+
+    // Convex, and with four actual corners. A rectangle seen from anywhere
+    // projects to a convex quad; a bow-tie or a wedge with three points on one
+    // line does not come from one, and rectifying it is what produced the
+    // smeared colour bands in the report rather than a page.
+    is_convex(quad) && corners_are_corners(quad)
+}
+
+/// All four turns in the same direction.
+///
+/// Measured by the sign of the cross product at each vertex: a convex polygon
+/// turns the same way all the way round, and a self-intersecting one does not.
+fn is_convex(quad: &[Point; 4]) -> bool {
+    let mut sign = 0.0_f64;
+    for i in 0..4 {
+        let (a, b, c) = (quad[i], quad[(i + 1) % 4], quad[(i + 2) % 4]);
+        let cross = f64::from(b.0 - a.0) * f64::from(c.1 - b.1)
+            - f64::from(b.1 - a.1) * f64::from(c.0 - b.0);
+        if cross == 0.0 {
+            return false; // three points on a line: not four corners
+        }
+        if sign == 0.0 {
+            sign = cross.signum();
+        } else if cross.signum() != sign {
+            return false;
+        }
+    }
+    true
+}
+
+/// Every interior angle is far enough from flat to be a corner.
+fn corners_are_corners(quad: &[Point; 4]) -> bool {
+    (0..4).all(|i| {
+        let (prev, here, next) = (quad[(i + 3) % 4], quad[i], quad[(i + 1) % 4]);
+        let (ux, uy) = (f64::from(prev.0 - here.0), f64::from(prev.1 - here.1));
+        let (vx, vy) = (f64::from(next.0 - here.0), f64::from(next.1 - here.1));
+        let lengths = (ux * ux + uy * uy).sqrt() * (vx * vx + vy * vy).sqrt();
+        if lengths == 0.0 {
+            return false;
+        }
+        let degrees = ((ux * vx + uy * vy) / lengths).clamp(-1.0, 1.0).acos().to_degrees();
+        (MIN_CORNER_DEGREES..=MAX_CORNER_DEGREES).contains(&degrees)
+    })
 }
 
 fn side_length(a: Point, b: Point) -> f64 {
@@ -284,6 +347,34 @@ mod tests {
             .map(|&(x, y)| IPoint::new(x as i32, y as i32))
             .collect();
         draw_polygon_mut(&mut buf, &poly, Rgb([230, 230, 230]));
+        image::DynamicImage::ImageRgb8(buf)
+    }
+
+    /// A page on a patterned surface, which is what the reported photographs
+    /// were and what this harness never had.
+    ///
+    /// Every fixture here used to be a light page on a flat dark ground, where
+    /// the page's edge is the only strong line in the frame. A checked
+    /// tablecloth puts dozens of equally strong lines around it, and a keyboard
+    /// or a lit screen puts long ones at angles — which is where the detector
+    /// started returning wedges that happened to be the largest quad it could
+    /// trace, rather than the page.
+    fn patterned_page(width: u32, height: u32, quad: [Point; 4]) -> image::DynamicImage {
+        let mut buf = ImageBuffer::from_pixel(width, height, Rgb([150u8, 142, 128]));
+        // The cloth: a grid of darker lines, close in tone to the paper so the
+        // page edge is not the brightest transition in the frame.
+        for y in 0..height {
+            for x in 0..width {
+                if x % 24 < 3 || y % 24 < 3 {
+                    buf.put_pixel(x, y, Rgb([110, 104, 94]));
+                }
+            }
+        }
+        let poly: Vec<IPoint<i32>> = quad
+            .iter()
+            .map(|&(x, y)| IPoint::new(x as i32, y as i32))
+            .collect();
+        draw_polygon_mut(&mut buf, &poly, Rgb([232, 230, 224]));
         image::DynamicImage::ImageRgb8(buf)
     }
 
@@ -618,5 +709,63 @@ mod tests {
     fn rejects_a_contour_that_has_no_quadrilateral() {
         let collinear: Vec<IPoint<i32>> = (0..20).map(|x| IPoint::new(x, 5)).collect();
         assert!(corner_quad(&collinear).is_none());
+    }
+
+    #[test]
+    fn a_wedge_with_three_points_on_one_line_is_not_a_page() {
+        // The A4-on-a-tablecloth case, as geometry: four points, three of them
+        // bunched along the bottom edge. The side-ratio test passes it — the
+        // short side is well over an eighth of the long one — and rectifying
+        // it is what produced the smeared colour bands instead of a page.
+        let wedge: [Point; 4] = [(60.0, 200.0), (70.0, 940.0), (300.0, 980.0), (150.0, 960.0)];
+        assert!(
+            !is_page_shaped(&wedge),
+            "a wedge was accepted as a page: {wedge:?}"
+        );
+    }
+
+    #[test]
+    fn a_bow_tie_is_not_a_page() {
+        // Self-intersecting: there is no photograph of a rectangle that looks
+        // like this, and no projection that flattens it.
+        let bow: [Point; 4] = [(100.0, 100.0), (500.0, 500.0), (500.0, 100.0), (100.0, 500.0)];
+        assert!(!is_page_shaped(&bow), "a bow-tie was accepted as a page");
+    }
+
+    #[test]
+    fn a_page_photographed_at_a_steep_angle_is_still_a_page() {
+        // The guard against over-tightening. This is a real perspective on a
+        // real sheet — the corners are far from square — and it has to pass,
+        // or the fix for the wedge becomes a worse bug than the wedge.
+        let steep: [Point; 4] = [(120.0, 90.0), (880.0, 240.0), (820.0, 900.0), (180.0, 660.0)];
+        assert!(
+            is_page_shaped(&steep),
+            "a steeply angled page was rejected: {steep:?}"
+        );
+    }
+
+    #[test]
+    fn a_patterned_background_never_yields_a_degenerate_quad() {
+        // The acceptance condition from the report: on a surface with its own
+        // strong lines, either find the page or say nothing — but never hand
+        // back a shape that rectifies into nonsense.
+        let (w, h) = (960u32, 1280u32);
+        let page: [Point; 4] = [(210.0, 300.0), (760.0, 330.0), (730.0, 1020.0), (240.0, 990.0)];
+        let img = patterned_page(w, h, page);
+
+        match find_document_quad(&img) {
+            None => { /* honest: the caller falls back to the whole frame */ }
+            Some(found) => {
+                assert!(
+                    is_page_shaped(&found),
+                    "returned a shape it would itself reject: {found:?}"
+                );
+                let iou = quad_iou(&found, &page, w, h);
+                assert!(
+                    iou > 0.5,
+                    "found a quad that is not the page (IoU {iou:.2}): {found:?}"
+                );
+            }
+        }
     }
 }
