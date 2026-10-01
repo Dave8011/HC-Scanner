@@ -7,7 +7,7 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'f4110ad0c6c6';
+const VERSION = '9122fecb1f37';
 const SHELL_CACHE = `opendocscan-shell-${VERSION}`;
 const ASSET_CACHE = `opendocscan-assets-${VERSION}`;
 

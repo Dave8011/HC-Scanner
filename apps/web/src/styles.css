@@ -723,7 +723,13 @@ body {
   border: 1px solid var(--line);
   color: var(--ink);
   padding: 10px 16px;
-  border-radius: 999px;
+  /* 20px, not 999px. A pill is right for the one-line toasts this started
+     with — at 14px with 10px of padding a single line is 38px tall, so 20px
+     still rounds the ends fully. 999px only looks like a pill while the box
+     stays short: the notice that a scan could not be kept runs seven lines in
+     German, and a 999px radius turned that into a circle with the ends of its
+     own lines cut off by the curve. */
+  border-radius: 20px;
   font-size: 14px;
   z-index: 40;
   max-width: min(90vw, 420px);
