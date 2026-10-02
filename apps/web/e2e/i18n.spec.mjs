@@ -110,8 +110,8 @@ test('an unknown language falls back rather than rendering blank', async () => {
 
 // ------------------------------------------------------------- the real pages
 
-// The two strings the reporter's own repro produces, and the node the app
-// rewrites on the way. Both are read from the running page.
+// The two strings the reproduction produces, and the node the app rewrites on
+// the way. Both are read from the running page.
 const wired = new WeakMap();
 
 async function runtimeStrings(page, base, path) {

@@ -197,11 +197,8 @@ fn is_lit_like_paper(quad: &[Point; 4], gray: &GrayImage) -> bool {
 
 /// The decision itself, over two medians.
 ///
-/// Split out from the sampling so that the measurements this came from can be
-/// asserted directly. The photographs they were taken from are not in this
-/// repository — they were the reporter's own, and the background of one of them
-/// was her screen — but three pairs of numbers are not a photograph, and they
-/// are the whole of the evidence for where the bound sits.
+/// Split out from the sampling so the measurements behind the bound can be
+/// asserted directly, without needing the images they were taken from.
 fn lit_like_paper(inside: f64, around: f64) -> bool {
     inside >= around - MAX_DARKER_THAN_SURROUND
 }
@@ -540,15 +537,13 @@ mod tests {
 
     /// The three measurements the bound was set from.
     ///
-    /// Taken at the size detection works at, from the two photographs that
-    /// prompted this task: the median luma inside each candidate quad against
-    /// the median of the band around it. The photographs themselves were the
-    /// reporter's and are not in this repository; these numbers are what they
-    /// told us, and they are what this bound has to keep answering correctly.
+    /// Measured at the size detection works at, on photographs of two pages in
+    /// difficult surroundings: the median luma inside each candidate quad
+    /// against the median of the band around it.
     ///
-    ///   the keyboard the detector returned    20 inside, 129 around
-    ///   the receipt held over it             160 inside, 149 around
-    ///   the sheet on the checked tablecloth  185 inside, 158 around
+    ///   a keyboard the detector preferred over the page   20 inside, 129 around
+    ///   a till receipt held above it                     160 inside, 149 around
+    ///   a sheet lying on a checked tablecloth            185 inside, 158 around
     #[test]
     fn the_bound_answers_the_photographs_it_was_set_from() {
         assert!(!lit_like_paper(20.0, 129.0),

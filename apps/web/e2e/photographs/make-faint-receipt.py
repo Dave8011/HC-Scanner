@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
-"""Draws the fixture `faint-receipt.jpg`: a till receipt as a phone photographs
-one, with nothing real on it.
+"""Draws the fixture `faint-receipt.jpg`: a till receipt as a phone
+photographs one, with nothing real on it.
 
-It replaces a photograph. The photograph was better evidence and it belonged to
-the person who took it, so what is left has to carry the two properties that
-made the bug visible, and no more:
+It has to carry the two properties that make the defect it stands for visible,
+and no more:
 
-  * the print is grey on grey, not black on white, which is what thermal
-    paper fades to;
+  * the print is grey on grey, not black on white, which is what thermal paper
+    fades to;
   * the light falls unevenly across the page, as it does in any hand-held shot.
 
-What it does NOT carry is the reported failure. Drawn text is too clean: the
+What it does NOT carry is the defect itself. Drawn text is too clean: the
 recogniser reads this page about equally well whichever illumination estimate
 is in place (38 of 38 printed words against 37). Several attempts at making it
-harder — fainter ink, tighter leading, dense bands where a receipt has its
-barcode — moved the two numbers to 18 and 21, which is noise rather than a
-regression. The failure needed real thermal print, real paper texture and real
-camera softness, and the photograph that had them is not ours to keep. So the
-test that uses this file is a smoke test for the filter-to-recogniser path, and
-the regression for the reported bug lives in docscan-filters as a unit test on
-the illumination estimate itself.
+harder - fainter ink, tighter leading, dense bands where a receipt has its
+barcode - moved the two numbers to 18 and 21, which is noise rather than a
+regression. The defect needed real thermal print, real paper texture and real
+camera softness. So the test that uses this file is a smoke test for the
+filter-to-recogniser path, and the regression for the defect itself lives in
+docscan-filters as a unit test on the illumination estimate.
 
 Re-run after editing:  python3 make-faint-receipt.py
 """
+import pathlib
 import random
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -91,5 +90,7 @@ for yy in range(H):
     for xx in range(W):
         pp[xx, yy] = max(0, min(255, pp[xx, yy] + random.randint(-4, 4)))
 
-page.convert("RGB").save("faint-receipt.jpg", quality=92)
-print("faint-receipt.jpg", page.size)
+# Next to this script, not next to whoever ran it.
+out = pathlib.Path(__file__).resolve().parent / "faint-receipt.jpg"
+page.convert("RGB").save(out, quality=92)
+print(out.name, page.size)

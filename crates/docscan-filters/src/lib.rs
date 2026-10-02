@@ -371,8 +371,8 @@ fn local_max(plane: &[u8], width: usize, height: usize, r: usize) -> Vec<u8> {
 /// narrow page. There the mean sits well below the paper, the gain comes out
 /// too high, and the strokes are lifted along with the paper — measured on a
 /// photographed thermal receipt, the mean estimate raised the median of the
-/// darkest tenth of the page from 19 to 28 while the paper went to 245, which
-/// is faint grey text on white and is what the reporter saw.
+/// darkest tenth of the page from 19 to 28 while the paper went to 245 — faint
+/// grey text on white.
 pub fn flatten_illumination_rgba(rgba: &mut [u8], width: u32, height: u32) {
     let (w, h) = (width as usize, height as usize);
     if w == 0 || h == 0 || rgba.len() < w * h * 4 {
@@ -679,10 +679,10 @@ mod tests {
     /// On a flat synthetic that is the whole of the damage. On a photograph,
     /// where the light falls unevenly and the print is dense in some places and
     /// not others, the overshoot varies across the page and takes the local
-    /// contrast with it: the reporter's receipt came back as faint grey on
-    /// white and the recogniser found 6 of its 30 printed words. The end of
-    /// that measurement is in `apps/web/e2e/receipt-ocr.spec.mjs`, which reads
-    /// the photograph itself; this is the mechanism underneath it.
+    /// contrast with it: a photographed till receipt came back as faint grey on
+    /// white, and of thirty words printed on it the recogniser found six. This
+    /// test covers the mechanism; `apps/web/e2e/receipt-ocr.spec.mjs` covers
+    /// the path it sits in.
     #[test]
     fn the_paper_estimate_follows_the_paper_not_the_print() {
         let (w, h) = (300u32, 900u32);
@@ -814,9 +814,8 @@ mod tests {
     /// case, and nothing tested it.
     /// A page under a warm lamp: white paper, dark text, an even warm cast.
     ///
-    /// The cast is the reporter's own recipe — the blue channel held down,
-    /// green a little — because that is what a tungsten bulb does to a phone
-    /// sensor and what the three real samples in the report had in common.
+    /// The cast holds the blue channel down and green a little, because that is
+    /// what a tungsten bulb does to a phone sensor.
     fn warm_page(width: u32, height: u32) -> Vec<u8> {
         let mut rgba = Vec::with_capacity((width * height * 4) as usize);
         for y in 0..height {

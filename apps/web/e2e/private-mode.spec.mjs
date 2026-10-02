@@ -7,8 +7,8 @@
 // scanning something sensitive in a private window were the only ones who
 // could not get their file out.
 //
-// The reproduction is the reporter's: make IndexedDB reject Blobs, which is
-// what Safari does there, and run the ordinary flow.
+// Reproduced by making IndexedDB reject Blobs, which is what Safari does in a
+// private window, and running the ordinary flow.
 //
 //   node apps/web/e2e/private-mode.spec.mjs
 

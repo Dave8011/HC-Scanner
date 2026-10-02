@@ -1,27 +1,19 @@
 // Faint grey print, through the filter and the recogniser.
 //
-// This is a smoke test, and it is worth saying which. The bug it comes from
-// was "the receipt is soft and the PDF is not searchable": of the words
-// printed on a photographed till receipt the app found one, and what it did
-// return began "stemes | fos | Sones rat] | SEE". Measured on that
-// photograph, the fix took it from 25 words to 120, and from 6 of 30 printed
-// words to 18.
+// This is a smoke test, and it is worth saying which. The defect behind it was
+// that a photographed till receipt came out soft and its PDF was not
+// searchable: of thirty words printed on the page the app found six, and the
+// text it returned began "stemes | fos | Sones rat] | SEE". Fixing the
+// illumination estimate took that to 120 words read and 18 of the thirty.
 //
-// That photograph is not in this repository — it was the reporter's own and
-// the background of it was her screen — and the failure does not survive being
-// drawn. The stand-in below reads about the same whichever illumination
-// estimate is in place, so this cannot go red for the reported bug; what it
-// guards is that the path itself keeps working on faint grey print. The
-// regression that does go red is in docscan-filters, on the illumination
-// estimate.
-//
-// The fixture was the reporter's own photograph until she asked for it back:
-// the background of it was her screen. What stands in for it is drawn, by
-// photographs/make-faint-receipt.py, and carries the two properties that made
-// the bug visible — grey print on grey paper, and light that falls unevenly
-// across a page whose print is dense in some bands and sparse in others. The
-// numbers in the record (25 words becoming 120) came from the photograph; what
-// this guards is the same path.
+// The page below is drawn, by photographs/make-faint-receipt.py, and carries
+// the two properties that made the defect visible: grey print on grey paper,
+// and light falling unevenly across a page whose print is dense in some bands
+// and sparse in others. It is not enough. Drawn print is too clean — the
+// recogniser reads it about equally well whichever illumination estimate is in
+// place — so this cannot go red for that defect, and what it guards is only
+// that the path keeps working on faint grey print at all. The regression that
+// does go red is in docscan-filters, on the illumination estimate itself.
 //
 // Run with: node apps/web/e2e/receipt-ocr.spec.mjs   (BASE_URL to point elsewhere)
 
@@ -34,8 +26,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BASE = process.env.BASE_URL ?? 'https://opendocscan.com';
 const RECEIPT = join(HERE, 'photographs/faint-receipt.jpg');
 
-// Printed on the receipt, in the reporter's own list and readable in the
-// photograph. Matched case-insensitively against the recognised text.
+// Printed on the drawn page. Matched case-insensitively against the
+// recognised text.
 const PRINTED = [
   'SAMPLE', 'STORE', 'NUMBER', 'WESTGATE', 'BRANCH', 'COUNTER', 'INVOICE', 'TILL',
   'QUANTITY', 'GREEN', 'LOOSE', 'LEAF', 'BISCUITS', 'PLAIN', 'SPARKLING', 'WATER',
@@ -46,8 +38,7 @@ const PRINTED = [
 
 /// Runs the app's own modules on the fixture: the same filter the Clean up
 /// screen applies, then the same recogniser the tray queues. Driving the
-/// screens instead would measure the screens; what the task is about is what
-/// comes back from those two.
+/// screens instead would measure the screens.
 async function readReceipt(page, filter) {
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
@@ -72,12 +63,11 @@ const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
 test('faint grey print survives the filter and the recogniser', async (page) => {
-  // Enhance, which is the filter the Clean up screen opens on and the one the
-  // report was made with. B & W was measured on the reporter's photograph and
-  // is unchanged by this work — Sauvola does not use the illumination
-  // estimate, and widening its window does not help it either (10, 8 and 9
-  // words at three window sizes). That it does worse than Enhance on faint
-  // thermal print is a separate matter from this one.
+  // Enhance, which is the filter the Clean up screen opens on. B & W is
+  // unchanged by this work — Sauvola does not use the illumination estimate,
+  // and widening its window does not help it either (10, 8 and 9 words at
+  // three window sizes). That it does worse than Enhance on faint thermal
+  // print is a separate matter from this one.
   const { words, text, size } = await readReceipt(page, 'enhance');
   const hits = PRINTED.filter((w) => text.toLowerCase().includes(w.toLowerCase()));
   console.log(`       ${size}, ${words} words read | ${hits.length}/${PRINTED.length} printed words found`);

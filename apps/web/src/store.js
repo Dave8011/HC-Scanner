@@ -1,11 +1,11 @@
 // The document library: everything the user has ever scanned, held in
 // IndexedDB in this browser and nowhere else.
 //
-// There is no sync, no account, and no server — which removes the entire
-// class of failure the report found users complaining about ("免费版导出全是
-// 水印，逼着订阅", "强制要求登录账号"), and introduces exactly one in its
-// place: a browser that discards site data reclaims the library. That is
-// what `requestPersistence` is for, and why the UI tells the user the
+// There is no sync, no account, and no server — which removes a whole class
+// of failure that scanner apps are commonly complained about for (watermarked
+// exports behind a subscription, a forced sign-in), and introduces exactly one
+// in its place: a browser that discards site data reclaims the library. That
+// is what `requestPersistence` is for, and why the UI tells the user the
 // answer rather than hiding it.
 
 const DB_NAME = 'opendocscan';

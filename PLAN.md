@@ -470,9 +470,8 @@ git commit -m "detect: implement synthetic-quad detection with IoU test + CI"
 ### Reversing §8's form judgment
 
 Section 8 concluded that browser and web forms were a blank in this market
-for a reason rather than as an opportunity: *"文档扫描依赖手机摄像头这一物理能力，
-浏览器插件/Web站运行在电脑端，无法调用手机摄像头完成核心拍摄动作"* — that scanning
-needs a phone camera and browser apps run on desktops.
+for a reason rather than as an opportunity: that scanning needs a phone
+camera, and that browser apps run on desktops and so cannot reach one.
 
 The premise is out of date. `getUserMedia({ facingMode: "environment" })`
 opens the rear camera on every current mobile browser, and everything
@@ -486,14 +485,14 @@ to scan a document by holding it up to a laptop.
 
 Three things the web form gives that the app form cannot:
 
-1. **No install and no review queue.** §9's切入点1 is a timed window —
+1. **No install and no review queue.** The opening §9 identifies is a timed window —
    Microsoft Lens stops scanning in March 2026 and its users are looking
    for a replacement now. A URL reaches them this week.
-2. **The privacy claim becomes falsifiable.** §9's切入点2 rests on a
+2. **The privacy claim becomes falsifiable.** §9's second opening rests on a
    promise a user must take on trust in a native app. In a tab they can
    open DevTools and check. That converts the central marketing claim into
-   something a sceptic can verify in thirty seconds — and per §9, a
-   reputation for "说到做到" is the part of that moat that is actually
+   something a sceptic can verify in thirty seconds — and a reputation for
+   doing what the page says is the part of that moat that is actually
    defensible.
 3. **It de-risks the mobile build.** The whole pipeline gets exercised on
    real hardware, in front of real users, before any of M1's

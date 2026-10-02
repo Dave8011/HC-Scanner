@@ -6,10 +6,9 @@ no page limit, and nothing uploaded.
 
 ## Why a web app at all
 
-The competitive study this app is scoped from surveyed ten scanner
-products and found no web version among them, concluding the form was a
-dead end: *"浏览器插件/Web站运行在电脑端，无法调用手机摄像头"* — browser apps run
-on desktops and so cannot reach a phone camera.
+Survey the scanner products on the market and there is no web version
+among them. The usual reasoning is that scanning needs a phone camera and
+that browser apps run on desktops, so a web app cannot reach one.
 
 That has not been true for years. `getUserMedia({ facingMode: "environment" })`
 opens the rear camera on any modern mobile browser, and every step after
