@@ -22,8 +22,8 @@ android {
         applicationId = "com.opendocscan.docscan"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // PLAN.md assumption 6. Also the floor for the camera and
-        // permission_handler plugins.
+        // The project's minimum supported Android. Also the floor for the
+        // camera and permission_handler plugins.
         minSdk = 24
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION

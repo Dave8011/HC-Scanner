@@ -1,6 +1,6 @@
 //! The mobile boundary.
 //!
-//! Everything here is glue. The rule from PLAN.md is that the core stays
+//! Everything here is glue. The rule is that the core stays
 //! platform-agnostic and testable without a mobile toolchain, so this crate
 //! holds the `flutter_rust_bridge` annotations and nothing else — no image
 //! processing, no decisions. If a function here does more than translate

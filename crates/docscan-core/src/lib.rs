@@ -4,8 +4,8 @@ use std::path::Path;
 /// A location in image coordinates: `(x, y)` in pixels, with `y` increasing
 /// downwards to match `image`'s buffer layout.
 ///
-/// This lives in `docscan-core` — the crate that owns the shared types
-/// (PLAN.md §2) — so that a quad produced by `docscan-detect` and consumed
+/// This lives in `docscan-core` — the crate that owns the shared types —
+/// so that a quad produced by `docscan-detect` and consumed
 /// by `docscan-transform` is literally the same type rather than two
 /// structurally-equal aliases that happen to agree today.
 pub type Point = (f32, f32);

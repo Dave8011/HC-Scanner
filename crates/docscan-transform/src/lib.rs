@@ -439,7 +439,7 @@ mod tests {
         )
     }
 
-    /// PLAN.md §6 asks this crate for "known-angle skew corrects to within N
+    /// What this crate owes is "known-angle skew corrects to within N
     /// pixels". Checking a handful of corner pixels are the page colour does
     /// not answer that — a stub returning a solid rectangle would pass it —
     /// so this checks *where content lands*.

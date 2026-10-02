@@ -102,8 +102,8 @@ export async function storageEstimate() {
 //
 // One transaction covering both stores, so a crash or a force-quit
 // mid-save leaves either the whole document or none of it. A document row
-// pointing at pages that were never written is the exact "silent document
-// loss" PLAN.md's success metrics forbid, and the only way to rule it out
+// pointing at pages that were never written is silent document loss, which
+// this product must never do, and the only way to rule it out
 // is for the two writes never to be separately abortable.
 export async function saveDocument(doc, pages) {
   const db = await openDb();

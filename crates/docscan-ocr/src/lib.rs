@@ -4,8 +4,8 @@
 //! This crate deliberately contains no recognition model. It owns the
 //! *shape* of the answer — where on the page each word sits — so that
 //! `docscan-pdf` can lay an invisible, selectable text layer over a scan
-//! without knowing or caring which engine read it (PLAN.md §2, "OCR engine
-//! seam"). A `tract`/ONNX backend on mobile and a WASM backend in the
+//! without knowing or caring which engine read it. A `tract`/ONNX backend
+//! on mobile and a WASM backend in the
 //! browser are then two implementations of one trait rather than two
 //! parallel pipelines.
 //!
@@ -100,7 +100,7 @@ impl OcrPage {
 /// A recogniser. One method, because recognition is one question.
 ///
 /// Implementations must not touch the network — the whole product promise
-/// rests on that (PLAN.md "Global Constraints"), and an engine that
+/// rests on that, and an engine that
 /// silently fetches a model on first use would break it in exactly the
 /// place nobody looks.
 pub trait OcrEngine {

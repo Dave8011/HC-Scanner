@@ -12,7 +12,7 @@
 //!
 //! * **Deterministic.** The same pages and options produce byte-identical
 //!   output, every time. No creation date, no document ID, no randomness
-//!   anywhere. That is what makes an export hashable in CI (PLAN.md §6),
+//!   anywhere. That is what makes an export hashable in CI,
 //!   and it is also why a user can diff two exports and learn something.
 //! * **Streaming-shaped.** Pages are encoded and written one at a time and
 //!   dropped; a twenty-page document never has twenty decoded bitmaps
@@ -812,8 +812,8 @@ mod tests {
 
     #[test]
     fn the_same_pages_export_byte_identical_output() {
-        // PLAN.md §6's "deterministic test pipeline" requirement, stated
-        // as the property it actually means.
+        // The deterministic-pipeline requirement, stated as the property it
+        // actually means.
         let build = || {
             build_pdf(
                 &[
