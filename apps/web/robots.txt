@@ -7,7 +7,7 @@ Allow: /
 # Named explicitly rather than left to the wildcard above. Several of these
 # read only the block naming their own User-agent and ignore `*`, so being
 # allowed in general is not the same as being allowed by them — recorded on
-# opensubs as APP-47. Google-Extended in particular is a separate opt-in from
+# opensubs. Google-Extended in particular is a separate opt-in from
 # ordinary Search: a site can rank and still be invisible to the thing that
 # summarises it.
 #
