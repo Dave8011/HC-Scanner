@@ -81,6 +81,35 @@ const MIN_QUAD_SIDE_RATIO: f64 = 0.125;
 const MIN_CORNER_DEGREES: f64 = 35.0;
 const MAX_CORNER_DEGREES: f64 = 145.0;
 
+/// How much darker than its surroundings a region may be and still be
+/// reported as a page, in luma levels.
+///
+/// Two measurements set it. The two photographed pages this came from sit 11
+/// and 27 levels *above* their surroundings, and the keyboard the detector
+/// preferred over one of them sits 109 below — so anywhere in between refuses
+/// the failure and keeps both pages.
+///
+/// What picks the number inside that range is the other end: a sheet of grey
+/// card on a white desk is paper, and it is about 60 levels darker than the
+/// desk. Below that the detector cannot see the page at all — Canny at these
+/// thresholds needs roughly 55 levels of step before it traces an edge — so
+/// 85 is the first value that keeps every page the detector can actually see
+/// while still refusing the keyboard by 24 levels. The refusals left are
+/// high-contrast dark objects on light grounds, which is what this is for.
+const MAX_DARKER_THAN_SURROUND: f64 = 85.0;
+
+/// How far the sampling regions are inset into, and grown out of, a candidate
+/// quad before its tone is measured.
+///
+/// The inset keeps the background out of the "inside" figure when an edge is a
+/// few pixels off, which it always is; the band outside has to be wide enough
+/// to hold a useful number of samples for a quad that nearly fills the frame.
+const INNER_SAMPLE_SCALE: f64 = 0.85;
+const OUTER_SAMPLE_SCALE: f64 = 1.25;
+
+/// Roughly how many tone samples to take across the frame's long edge.
+const TONE_SAMPLES_PER_EDGE: u32 = 220;
+
 /// Finds the quadrilateral of the largest document-like region in `img`.
 ///
 /// Returns its four corners ordered top-left, top-right, bottom-right,
@@ -108,15 +137,145 @@ pub fn find_document_quad_luma(gray: &GrayImage) -> Option<[Point; 4]> {
     let edges = canny(gray, 50.0, 100.0);
     let contours = find_contours::<i32>(&edges);
 
-    contours
+    let mut candidates: Vec<(f64, [Point; 4])> = contours
         .iter()
         .filter(|c| c.points.len() >= 4)
         .filter_map(|c| corner_quad(&c.points))
         .filter(is_page_shaped)
         .map(|quad| (polygon_area(&quad), quad))
         .filter(|(area, _)| *area >= min_area)
-        .max_by(|(a, _), (b, _)| a.total_cmp(b))
+        .collect();
+
+    // Largest first, then the first one that is also lit like paper. Taking
+    // the largest outright was the old behaviour; the tone test is what the
+    // shape tests cannot do, and running it in this order means it is asked
+    // about a handful of candidates rather than all of them.
+    candidates.sort_by(|(a, _), (b, _)| b.total_cmp(a));
+    candidates
+        .into_iter()
         .map(|(_, quad)| quad)
+        .find(|quad| is_lit_like_paper(quad, gray))
+}
+
+/// Whether the region inside `quad` is lit like a sheet of paper rather than
+/// like whatever the paper is lying on.
+///
+/// Geometry cannot answer this. A keyboard, a window, a laptop lid and a
+/// photograph of a page are all rectangles with four square corners, and the
+/// detector has returned each of them. What it returned from a receipt held
+/// over a keyboard was a corner of the keyboard: a well-formed quadrilateral,
+/// convex, sensible proportions, every geometric test passed — and its
+/// interior measured luma 20 against a surround of 129.
+///
+/// So this asks the one question the shape cannot: paper is not markedly
+/// darker than what it is lying on. Measured on the two photographs that
+/// prompted it, both real pages sit *above* their surroundings — a receipt on
+/// a desk by 11 levels, a sheet on a tablecloth by 27 — while the keyboard the
+/// detector preferred sits 109 below. The bound is set at 25 rather than at 0
+/// because the common case this must not break is a page on a pale desk, where
+/// the difference is near zero and can fall either way with the shadow the
+/// photographer casts over it.
+///
+/// What it deliberately does not do is prefer the brightest thing in the
+/// frame. A lit screen is brighter than paper, and this says nothing about
+/// that; it only refuses the clearly dark.
+///
+/// The limitation is worth naming: a genuinely dark document — a black slide
+/// printed on a white desk — is refused by this, and the caller falls back to
+/// the whole frame with "drag the corners to fit". That is the right trade
+/// while the alternative is handing someone a rectified photograph of their
+/// keyboard with no indication anything went wrong.
+fn is_lit_like_paper(quad: &[Point; 4], gray: &GrayImage) -> bool {
+    match tone_inside_and_around(quad, gray) {
+        Some((inside, around)) => lit_like_paper(inside, around),
+        // Too small to sample either region: the area test upstream already
+        // rejects anything this small, so this is unreachable in practice and
+        // not a reason to refuse a page.
+        None => true,
+    }
+}
+
+/// The decision itself, over two medians.
+///
+/// Split out from the sampling so that the measurements this came from can be
+/// asserted directly. The photographs they were taken from are not in this
+/// repository — they were the reporter's own, and the background of one of them
+/// was her screen — but three pairs of numbers are not a photograph, and they
+/// are the whole of the evidence for where the bound sits.
+fn lit_like_paper(inside: f64, around: f64) -> bool {
+    inside >= around - MAX_DARKER_THAN_SURROUND
+}
+
+/// Median luma just inside `quad`, and median luma in the band just outside
+/// it. `None` when either region is too small to have a median.
+///
+/// Both regions are taken from the quad itself rather than from a bounding
+/// box, so a page lying at an angle is compared against what actually
+/// surrounds it and not against two corners of the frame. The inner region is
+/// inset so a slightly misplaced edge does not drag the background into it,
+/// and the outer band is a ring rather than "everything else" so a bright
+/// window in the far corner of the picture cannot speak for the desk.
+fn tone_inside_and_around(quad: &[Point; 4], gray: &GrayImage) -> Option<(f64, f64)> {
+    let (width, height) = gray.dimensions();
+    let cx = quad.iter().map(|p| f64::from(p.0)).sum::<f64>() / 4.0;
+    let cy = quad.iter().map(|p| f64::from(p.1)).sum::<f64>() / 4.0;
+    let scaled = |k: f64| -> [(f64, f64); 4] {
+        let mut out = [(0.0, 0.0); 4];
+        for (i, corner) in quad.iter().enumerate() {
+            out[i] = (
+                cx + (f64::from(corner.0) - cx) * k,
+                cy + (f64::from(corner.1) - cy) * k,
+            );
+        }
+        out
+    };
+    let inner = scaled(INNER_SAMPLE_SCALE);
+    let outer = scaled(OUTER_SAMPLE_SCALE);
+
+    // One sample every `step` pixels in each direction: a median does not get
+    // better by reading every pixel, and this runs several times a second on
+    // the live preview.
+    let step = (width.max(height) / TONE_SAMPLES_PER_EDGE).max(1);
+    let mut inside = Vec::new();
+    let mut around = Vec::new();
+    for y in (0..height).step_by(step as usize) {
+        for x in (0..width).step_by(step as usize) {
+            let (fx, fy) = (f64::from(x), f64::from(y));
+            let value = f64::from(gray.get_pixel(x, y).0[0]);
+            if contains(&inner, fx, fy) {
+                inside.push(value);
+            } else if contains(&outer, fx, fy) {
+                around.push(value);
+            }
+        }
+    }
+    if inside.is_empty() || around.is_empty() {
+        return None;
+    }
+    Some((median(&mut inside), median(&mut around)))
+}
+
+/// Whether `(x, y)` is inside a convex quad, by the sign of the cross product
+/// against each edge in turn.
+fn contains(poly: &[(f64, f64); 4], x: f64, y: f64) -> bool {
+    let mut sign = 0i32;
+    for i in 0..4 {
+        let a = poly[i];
+        let b = poly[(i + 1) % 4];
+        let cross = (b.0 - a.0) * (y - a.1) - (b.1 - a.1) * (x - a.0);
+        let this = if cross > 0.0 { 1 } else { -1 };
+        if sign == 0 {
+            sign = this;
+        } else if sign != this {
+            return false;
+        }
+    }
+    true
+}
+
+fn median(values: &mut [f64]) -> f64 {
+    values.sort_by(|a, b| a.total_cmp(b));
+    values[values.len() / 2]
 }
 
 /// Whether a quad is a plausible photograph of a document, as opposed to
@@ -376,6 +535,66 @@ mod tests {
             .collect();
         draw_polygon_mut(&mut buf, &poly, Rgb([232, 230, 224]));
         image::DynamicImage::ImageRgb8(buf)
+    }
+
+
+    /// The three measurements the bound was set from.
+    ///
+    /// Taken at the size detection works at, from the two photographs that
+    /// prompted this task: the median luma inside each candidate quad against
+    /// the median of the band around it. The photographs themselves were the
+    /// reporter's and are not in this repository; these numbers are what they
+    /// told us, and they are what this bound has to keep answering correctly.
+    ///
+    ///   the keyboard the detector returned    20 inside, 129 around
+    ///   the receipt held over it             160 inside, 149 around
+    ///   the sheet on the checked tablecloth  185 inside, 158 around
+    #[test]
+    fn the_bound_answers_the_photographs_it_was_set_from() {
+        assert!(!lit_like_paper(20.0, 129.0),
+                "a keyboard 109 levels darker than its surroundings is not a page");
+        assert!(lit_like_paper(160.0, 149.0),
+                "a receipt on a desk is a page");
+        assert!(lit_like_paper(185.0, 158.0),
+                "a sheet on a tablecloth is a page");
+        // And the other end of the bound, which is what sets its value: grey
+        // card sits about sixty levels under a white desk and is still paper.
+        assert!(lit_like_paper(170.0, 232.0),
+                "grey card on a white desk is a page");
+    }
+
+    #[test]
+    fn a_dark_rectangle_on_a_light_ground_is_not_a_page() {
+        let quad: [Point; 4] = [(80.0, 60.0), (520.0, 60.0), (520.0, 440.0), (80.0, 440.0)];
+        let page = synthetic_page(600, 500, quad);
+        assert!(find_document_quad(&page).is_some(), "a light page on a dark desk is a page");
+
+        let mut buf = ImageBuffer::from_pixel(600, 500, Rgb([225u8, 225, 225]));
+        let poly: Vec<IPoint<i32>> = quad.iter()
+            .map(|&(x, y)| IPoint::new(x as i32, y as i32)).collect();
+        // Luma 25 against 225: the tone a keyboard measured in the reported
+        // photograph, against the tone of the desk around it.
+        draw_polygon_mut(&mut buf, &poly, Rgb([25, 25, 25]));
+        let inverted = image::DynamicImage::ImageRgb8(buf);
+        assert_eq!(find_document_quad(&inverted), None,
+                   "a dark slab on a light ground is not a photographed page");
+    }
+
+    /// The bound is not "brighter than its surroundings" but "not markedly
+    /// darker", because a page on a pale desk is the common case and the
+    /// difference there is near zero.
+    #[test]
+    fn a_grey_card_on_a_white_desk_is_still_a_page() {
+        // The bound's other side. Paper is not always white: grey card sits
+        // about sixty levels under a white desk, and refusing it would trade
+        // one wrong answer for a different one.
+        let quad: [Point; 4] = [(80.0, 60.0), (520.0, 60.0), (520.0, 440.0), (80.0, 440.0)];
+        let mut buf = ImageBuffer::from_pixel(600, 500, Rgb([232u8, 232, 232]));
+        let poly: Vec<IPoint<i32>> = quad.iter()
+            .map(|&(x, y)| IPoint::new(x as i32, y as i32)).collect();
+        draw_polygon_mut(&mut buf, &poly, Rgb([170, 170, 170]));
+        assert!(find_document_quad(&image::DynamicImage::ImageRgb8(buf)).is_some(),
+                "grey card on a white desk is a page the detector can see");
     }
 
     fn rasterize_quad(quad: &[Point; 4], width: u32, height: u32) -> Vec<bool> {

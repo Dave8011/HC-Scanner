@@ -294,6 +294,66 @@ fn window_radius(width: usize, height: usize, fraction: f32) -> usize {
     ((width.min(height) as f32 * fraction) as usize).max(1)
 }
 
+/// The brightest value within `r` of each pixel, in two separable passes.
+///
+/// Used to estimate what the paper would read if the ink were not there. A box
+/// *mean* cannot do that job where the ink is dense: the mean of a window full
+/// of small print sits well below the paper around it, so dividing by it lifts
+/// the strokes as much as the paper and the print comes out fainter than it
+/// went in. A maximum over the same window is the paper wherever any paper
+/// shows through, which on text is everywhere between the letters.
+///
+/// Each pass is a sliding-window maximum over a monotonic deque, so the cost
+/// is one pass per axis regardless of how wide the window is.
+fn local_max(plane: &[u8], width: usize, height: usize, r: usize) -> Vec<u8> {
+    let mut rows = vec![0u8; width * height];
+    let mut deque: std::collections::VecDeque<usize> = std::collections::VecDeque::new();
+    for y in 0..height {
+        deque.clear();
+        let row = &plane[y * width..][..width];
+        for x in 0..width {
+            // The window for output pixel `x - r` closes at input `x`.
+            while let Some(&back) = deque.back() {
+                if row[back] <= row[x] { deque.pop_back(); } else { break }
+            }
+            deque.push_back(x);
+            if x >= r {
+                let out = x - r;
+                while *deque.front().unwrap() + r < out { deque.pop_front(); }
+                rows[y * width + out] = row[*deque.front().unwrap()];
+            }
+        }
+        // The last `r` outputs have no further input to wait for.
+        for out in width.saturating_sub(r)..width {
+            while *deque.front().unwrap() + r < out { deque.pop_front(); }
+            rows[y * width + out] = row[*deque.front().unwrap()];
+        }
+    }
+
+    let mut out = vec![0u8; width * height];
+    let mut column = vec![0u8; height];
+    for x in 0..width {
+        for y in 0..height { column[y] = rows[y * width + x]; }
+        deque.clear();
+        for y in 0..height {
+            while let Some(&back) = deque.back() {
+                if column[back] <= column[y] { deque.pop_back(); } else { break }
+            }
+            deque.push_back(y);
+            if y >= r {
+                let o = y - r;
+                while *deque.front().unwrap() + r < o { deque.pop_front(); }
+                out[o * width + x] = column[*deque.front().unwrap()];
+            }
+        }
+        for o in height.saturating_sub(r)..height {
+            while *deque.front().unwrap() + r < o { deque.pop_front(); }
+            out[o * width + x] = column[*deque.front().unwrap()];
+        }
+    }
+    out
+}
+
 /// Divide out the page's own lighting, in place.
 ///
 /// A photograph of a page is the page multiplied by however the light fell on
@@ -302,8 +362,17 @@ fn window_radius(width: usize, height: usize, fraction: f32) -> usize {
 /// the global contrast stretch cannot substitute for, because a shadow supplies
 /// both ends of the histogram itself and leaves the stretch nearly an identity.
 ///
-/// The estimate is a wide box mean of the luma. Text is small and dark, so a
-/// window that wide averages mostly paper; what it tracks is the illumination.
+/// The estimate is the local *peak* luma, smoothed: the brightest value within
+/// a window of each pixel is the paper there, because on text there is always
+/// paper between the letters. It was a box mean of the luma, on the reasoning
+/// that text is small and dark and a wide window therefore averages mostly
+/// paper. That holds for a double-spaced A4 and fails for the thing people
+/// photograph most: a till receipt, where small print fills the full width of a
+/// narrow page. There the mean sits well below the paper, the gain comes out
+/// too high, and the strokes are lifted along with the paper — measured on a
+/// photographed thermal receipt, the mean estimate raised the median of the
+/// darkest tenth of the page from 19 to 28 while the paper went to 245, which
+/// is faint grey text on white and is what the reporter saw.
 pub fn flatten_illumination_rgba(rgba: &mut [u8], width: u32, height: u32) {
     let (w, h) = (width as usize, height as usize);
     if w == 0 || h == 0 || rgba.len() < w * h * 4 {
@@ -311,8 +380,11 @@ pub fn flatten_illumination_rgba(rgba: &mut [u8], width: u32, height: u32) {
     }
 
     let plane = luma_plane(rgba);
-    let integral = Integral::new(&plane, w, h);
     let r = window_radius(w, h, BACKGROUND_WINDOW);
+    // The paper under each pixel: the brightest value nearby, then smoothed so
+    // the field has no steps in it. See `local_max` for why this is not a mean.
+    let paper = local_max(&plane, w, h, r);
+    let integral = Integral::new(&paper, w, h);
 
     // Scale back to a paper white just under 255. Going to 255 exactly clips
     // the lightest real paper texture into a flat block and costs the ink its
@@ -321,11 +393,11 @@ pub fn flatten_illumination_rgba(rgba: &mut [u8], width: u32, height: u32) {
 
     for y in 0..h {
         for x in 0..w {
-            let (mean, _) = integral.window(x, y, r);
+            let (background, _) = integral.window(x, y, r);
             // A window that is genuinely dark everywhere — a photograph of
             // something that is not a page — would otherwise be multiplied up
             // into noise.
-            let gain = TARGET / mean.max(24.0);
+            let gain = TARGET / background.max(24.0);
             let px = &mut rgba[(y * w + x) * 4..][..4];
             for c in px.iter_mut().take(3) {
                 *c = (f32::from(*c) * gain).round().clamp(0.0, 255.0) as u8;
@@ -560,6 +632,80 @@ mod tests {
         sum as f64 / luma.pixels().len() as f64
     }
 
+    /// A narrow page whose small print fills its width, which is what a till
+    /// receipt is and what the illumination estimate used to get wrong.
+    ///
+    /// `paper` and `ink` are close together on purpose: thermal print is grey
+    /// on grey, and that is the case where lifting the ink along with the paper
+    /// destroys the page.
+    fn dense_receipt(width: u32, height: u32, paper: u8, ink: u8) -> Vec<u8> {
+        let mut rgba = vec![0u8; (width * height * 4) as usize];
+        for y in 0..height {
+            // A line of print every 14 rows, 5 rows tall: about a third of the
+            // page is ink, which is a receipt rather than a letter.
+            let printing = y % 14 < 5 && y > 20 && y < height - 20;
+            for x in 0..width {
+                // A margin, and gaps between the characters, so the page is not
+                // one solid bar.
+                let on_paper = x > 12 && x < width - 12;
+                let stroke = printing && on_paper && (x / 3) % 2 == 0;
+                let value = if stroke { ink } else { paper };
+                let i = ((y * width + x) * 4) as usize;
+                rgba[i] = value;
+                rgba[i + 1] = value;
+                rgba[i + 2] = value;
+                rgba[i + 3] = 255;
+            }
+        }
+        rgba
+    }
+
+    fn luma_at(rgba: &[u8], quantile: f64) -> f64 {
+        let mut l: Vec<u8> = rgba.chunks_exact(4).map(|p| luma(p[0], p[1], p[2])).collect();
+        l.sort_unstable();
+        f64::from(l[((l.len() - 1) as f64 * quantile) as usize])
+    }
+
+    /// The illumination estimate has to track the paper, not the print.
+    ///
+    /// It was a box mean over a wide window, on the reasoning that text is
+    /// small and dark so a wide window averages mostly paper. That holds for a
+    /// double-spaced A4 and fails for the thing people photograph most: on a
+    /// till receipt the small print fills the width of a narrow page, the mean
+    /// sits well below the paper, and the gain comes out too high. Here that
+    /// shows as the paper overshooting its target and clipping — 255 instead
+    /// of 245 — which is the headroom the next step needs.
+    ///
+    /// On a flat synthetic that is the whole of the damage. On a photograph,
+    /// where the light falls unevenly and the print is dense in some places and
+    /// not others, the overshoot varies across the page and takes the local
+    /// contrast with it: the reporter's receipt came back as faint grey on
+    /// white and the recogniser found 6 of its 30 printed words. The end of
+    /// that measurement is in `apps/web/e2e/receipt-ocr.spec.mjs`, which reads
+    /// the photograph itself; this is the mechanism underneath it.
+    #[test]
+    fn the_paper_estimate_follows_the_paper_not_the_print() {
+        let (w, h) = (300u32, 900u32);
+        let mut page = dense_receipt(w, h, 170, 110);
+        flatten_illumination_rgba(&mut page, w, h);
+
+        let paper = luma_at(&page, 0.9);
+        assert!(
+            (240.0..=250.0).contains(&paper),
+            "the paper should land on its target with headroom to spare, got {paper} \
+             — above 250 the estimate is reading the print as if it were shadow"
+        );
+
+        // And the print must still be print: the ratio it had to the paper is
+        // what the flattening is supposed to preserve.
+        let print = luma_at(&page, 0.05);
+        let ratio = print / paper;
+        assert!(
+            (0.60..=0.70).contains(&ratio),
+            "the print's depth against the paper changed: {print}/{paper} = {ratio:.2}, \
+             it was 110/170 = 0.65 before"
+        );
+    }
     #[test]
     fn binarizes_below_and_above_threshold_pixels_to_pure_black_and_white() {
         // 2x1 image: pixel 0 has luma clearly below BW_THRESHOLD (128),
@@ -920,4 +1066,54 @@ mod tests {
         let blue = rgba[2] as f32;
         assert!(blue <= 20.0 * MAX_CAST_GAIN + 1.0, "blue was amplified to {blue}");
     }
+}
+
+#[cfg(test)]
+mod receipt_probe {
+    use super::*;
+
+    fn stats(label: &str, rgba: &[u8]) {
+        let mut l: Vec<u8> = rgba.chunks_exact(4).map(|p| luma(p[0], p[1], p[2])).collect();
+        l.sort_unstable();
+        let at = |q: f64| f64::from(l[((l.len() - 1) as f64 * q) as usize]);
+        let ink = l.iter().filter(|v| **v < 128).count() as f64 / l.len() as f64;
+        let darkest = l[..l.len() / 20].iter().map(|v| f64::from(*v)).sum::<f64>()
+            / (l.len() / 20) as f64;
+        println!("{label:28} p5 {:5.1}  median {:5.1}  p95 {:5.1}  ink<128 {:5.2}%  darkest5% {:5.1}",
+                 at(0.05), at(0.5), at(0.95), 100.0 * ink, darkest);
+    }
+
+    #[test]
+    fn what_enhance_does_to_a_thermal_receipt() {
+        let Ok(path) = std::env::var("DOCSCAN_RECEIPT") else { return };
+        let img = image::open(&path).expect("open").to_rgba8();
+        // Receipt only — no hand, no keyboard. A rectified page is just paper,
+        // and letting the dark surroundings into the crop hides what the
+        // global stretch at the end of Enhance does, because they supply the
+        // bottom of the histogram themselves.
+        let crop = image::imageops::crop_imm(&img, 310, 210, 290, 1030).to_image();
+        let (w, h) = crop.dimensions();
+        let raw = crop.into_raw();
+
+        stats("as photographed", &raw);
+        let mut a = raw.clone();
+        neutralise_paper_rgba(&mut a);
+        stats("  after neutralise", &a);
+        flatten_illumination_rgba(&mut a, w, h);
+        stats("  after flatten", &a);
+        enhance_rgba(&mut a, 0);
+        stats("  after stretch (= Enhance)", &a);
+
+        let mut bw = raw.clone();
+        binarize_adaptive_rgba(&mut bw, w, h, 0);
+        stats("B & W", &bw);
+
+        if let Ok(dir) = std::env::var("DOCSCAN_OUT") {
+            image::RgbaImage::from_raw(w, h, a).unwrap()
+                .save(format!("{dir}/receipt-enhanced.png")).unwrap();
+            image::RgbaImage::from_raw(w, h, bw).unwrap()
+                .save(format!("{dir}/receipt-bw.png")).unwrap();
+        }
+    }
+
 }
