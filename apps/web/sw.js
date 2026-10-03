@@ -7,9 +7,9 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = '9122fecb1f37';
-const SHELL_CACHE = `opendocscan-shell-${VERSION}`;
-const ASSET_CACHE = `opendocscan-assets-${VERSION}`;
+const VERSION = 'hc-rebrand-v1';
+const SHELL_CACHE = `hcscanner-shell-${VERSION}`;
+const ASSET_CACHE = `hcscanner-assets-${VERSION}`;
 
 // The smallest set that gets someone from a cold start to a finished scan
 // with no network. Deliberately excludes the OCR engine, which is ~6MB —
@@ -136,9 +136,9 @@ const ACCOUNT_PAGES = ['/account', '/account.html'];
 
 function blocked(href) {
   console.warn('[sw] blocked a cross-origin request:', href);
-  return new Response('OpenDocScan does not make requests to other servers.', {
+  return new Response('HC Scanner does not make requests to other servers.', {
     status: 403,
-    statusText: 'Blocked by OpenDocScan',
+    statusText: 'Blocked by HC Scanner',
   });
 }
 
