@@ -200,6 +200,53 @@
           <button class="btn primary" id="btn-save">Save &amp; export</button>
         </div>
       </section>
+      <!-- Cloud Save --------------------------------------------------- -->
+      <section class="view" id="view-cloud-save" data-view="cloud-save" hidden>
+        <header class="bar">
+          <button class="icon-btn" id="btn-cloud-back" aria-label="Back to pages">←</button>
+          <h2>Save scan</h2>
+          <span class="icon-btn" style="visibility: hidden"></span>
+        </header>
+
+        <div class="pad">
+          <label class="field">
+            <span>Document name</span>
+            <input type="text" id="cloud-doc-title" value="Scanned_Document.pdf" autocomplete="off" />
+          </label>
+        </div>
+
+        <div class="pad" id="cloud-ui-container">
+          <div id="cloud-auth-required" hidden>
+            <p><strong>Authentication Required</strong></p>
+            <p>Your HC Cloud session has expired. Please reopen Scanner from HC Cloud.</p>
+          </div>
+          
+          <div id="cloud-storage-ui" hidden>
+            <label class="field">
+              <span>Target Drive</span>
+              <select id="cloud-drive-select"></select>
+            </label>
+            <label class="field">
+              <span>Target Folder</span>
+              <select id="cloud-folder-select"></select>
+            </label>
+            <p id="cloud-status-msg" style="color: var(--text-muted); font-size: 14px; margin-top: 8px;"></p>
+          </div>
+        </div>
+        
+        <div class="pad" id="cloud-upload-ui" hidden style="text-align: center;">
+          <h3 id="cloud-upload-title" style="margin-bottom: 8px;">Uploading document...</h3>
+          <div style="background: var(--surface-active); border-radius: 4px; overflow: hidden; height: 8px; margin-bottom: 8px;">
+            <div id="cloud-upload-progress-bar" style="background: var(--brand); height: 100%; width: 0%;"></div>
+          </div>
+          <p id="cloud-upload-pct" style="color: var(--text-muted);">0%</p>
+        </div>
+
+        <div class="dock">
+          <button class="btn ghost" id="btn-cloud-download">Download Locally</button>
+          <button class="btn primary" id="btn-cloud-save">Save to HC Cloud</button>
+        </div>
+      </section>
 
       <!-- Saved document ----------------------------------------------- -->
       <section class="view" id="view-doc" data-view="doc" hidden>

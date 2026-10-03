@@ -9,6 +9,7 @@
 import { t, lang } from './i18n.js';
 import * as store from './store.js';
 import * as ocr from './ocr.js';
+import * as hc from './hc.js';
 import {
   initScanner,
   imageDataFrom,
@@ -985,6 +986,8 @@ function movePage(index, delta) {
 
 // --- save and export -------------------------------------------------------
 
+let cloudSaveContext = null;
+
 async function saveAndExport() {
   if (state.draft.length === 0) return;
 
@@ -1066,15 +1069,9 @@ async function saveAndExport() {
       await renderLibrary();
     }
 
-    await offerFile(pdf, `${safeFileName(title)}.pdf`);
+    // Hand over to the HC Cloud Save UI instead of immediately downloading
+    openCloudSave(pdf, title, id, kept);
 
-    if (kept) {
-      await openDocument(id);
-    } else {
-      // Long: it is the only notice that this scan exists nowhere but in the
-      // file they were just handed.
-      toast(t('export.notKept'), 7000);
-    }
   } catch (error) {
     idle();
     console.error(error);
@@ -1082,6 +1079,147 @@ async function saveAndExport() {
     toast(t('export.failedKept'));
   }
 }
+
+async function openCloudSave(pdfBlob, title, id, kept) {
+  cloudSaveContext = { pdfBlob, title, id, kept };
+  $('cloud-doc-title').value = title + '.pdf';
+  
+  $('cloud-auth-required').hidden = true;
+  $('cloud-storage-ui').hidden = true;
+  $('cloud-upload-ui').hidden = true;
+  $('cloud-status-msg').textContent = '';
+  $('btn-cloud-save').disabled = false;
+  $('btn-cloud-save').hidden = false;
+  $('btn-cloud-download').disabled = false;
+  
+  show('cloud-save');
+  
+  if (!hc.getAuthState()) {
+    $('cloud-auth-required').hidden = false;
+    $('btn-cloud-save').disabled = true;
+    return;
+  }
+  
+  $('cloud-storage-ui').hidden = false;
+  $('cloud-status-msg').textContent = 'Loading drives...';
+  $('cloud-drive-select').innerHTML = '';
+  $('cloud-folder-select').innerHTML = '';
+  $('btn-cloud-save').disabled = true;
+  
+  try {
+    const drives = await hc.fetchDrives();
+    if (drives.length === 0) {
+      $('cloud-status-msg').textContent = 'No drives available.';
+      return;
+    }
+    
+    $('cloud-status-msg').textContent = '';
+    for (const d of drives) {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.name;
+      $('cloud-drive-select').appendChild(opt);
+    }
+    await loadCloudFolders();
+  } catch (err) {
+    handleHcError(err);
+  }
+}
+
+async function loadCloudFolders() {
+  const driveId = $('cloud-drive-select').value;
+  if (!driveId) return;
+  
+  $('cloud-status-msg').textContent = 'Loading folders...';
+  $('cloud-folder-select').innerHTML = '';
+  $('btn-cloud-save').disabled = true;
+  
+  try {
+    const folders = await hc.fetchFolders(driveId);
+    if (folders.length === 0) {
+      $('cloud-status-msg').textContent = 'Empty folder.';
+    } else {
+      $('cloud-status-msg').textContent = '';
+      for (const f of folders) {
+        const opt = document.createElement('option');
+        opt.value = f.id;
+        opt.textContent = f.name;
+        $('cloud-folder-select').appendChild(opt);
+      }
+    }
+    $('btn-cloud-save').disabled = false;
+  } catch (err) {
+    handleHcError(err);
+  }
+}
+
+function handleHcError(err) {
+  $('btn-cloud-save').disabled = true;
+  const msg = err.message;
+  if (msg === '401') {
+    $('cloud-auth-required').hidden = false;
+    $('cloud-storage-ui').hidden = true;
+  } else if (msg === '403') {
+    $('cloud-status-msg').textContent = 'Permission denied.';
+  } else if (msg === '404') {
+    $('cloud-status-msg').textContent = 'Storage location unavailable.';
+  } else if (msg === '409') {
+    $('cloud-status-msg').textContent = 'File already exists.';
+  } else if (msg === '413') {
+    $('cloud-status-msg').textContent = 'File is too large.';
+  } else if (msg === '500') {
+    $('cloud-status-msg').textContent = 'HC Cloud could not save the document.';
+  } else {
+    $('cloud-status-msg').textContent = 'Unable to connect to HC Cloud.';
+  }
+}
+
+async function onCloudSaveClick() {
+  let filename = $('cloud-doc-title').value.trim();
+  filename = filename.replace(/[^\p{L}\p{N} ._-]/gu, '').trim();
+  if (!filename) filename = 'Scanned_Document';
+  if (!filename.toLowerCase().endsWith('.pdf')) {
+    filename += '.pdf';
+  }
+  
+  const driveId = $('cloud-drive-select').value;
+  const folderId = $('cloud-folder-select').value;
+  
+  $('cloud-storage-ui').hidden = true;
+  $('cloud-upload-ui').hidden = false;
+  $('cloud-upload-title').textContent = 'Uploading document...';
+  $('cloud-upload-pct').textContent = '0%';
+  $('cloud-upload-progress-bar').style.width = '0%';
+  $('btn-cloud-save').disabled = true;
+  $('btn-cloud-download').disabled = true;
+  
+  try {
+    await hc.uploadDocument(cloudSaveContext.pdfBlob, driveId, folderId, filename, (pct) => {
+      $('cloud-upload-pct').textContent = `${pct}%`;
+      $('cloud-upload-progress-bar').style.width = `${pct}%`;
+    });
+    $('cloud-upload-title').textContent = '✓ Document saved';
+    $('btn-cloud-save').hidden = true;
+    $('btn-cloud-download').disabled = false;
+  } catch (err) {
+    $('cloud-upload-ui').hidden = true;
+    $('cloud-storage-ui').hidden = false;
+    handleHcError(err);
+    $('btn-cloud-save').disabled = false;
+    $('btn-cloud-download').disabled = false;
+  }
+}
+
+async function onCloudDownloadClick() {
+  const filename = safeFileName(cloudSaveContext.title) + '.pdf';
+  await offerFile(cloudSaveContext.pdfBlob, filename);
+  if (cloudSaveContext.kept) {
+    await openDocument(cloudSaveContext.id);
+  } else {
+    toast(t('export.notKept'), 7000);
+  }
+}
+
 
 function safeFileName(title) {
   return title.replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 60) || 'scan';
@@ -1329,6 +1467,12 @@ function wire() {
     await renderLibrary();
   });
   $('btn-save').addEventListener('click', saveAndExport);
+  
+  // HC Cloud Integration Events
+  $('btn-cloud-back').addEventListener('click', openTray);
+  $('cloud-drive-select').addEventListener('change', loadCloudFolders);
+  $('btn-cloud-save').addEventListener('click', onCloudSaveClick);
+  $('btn-cloud-download').addEventListener('click', onCloudDownloadClick);
 
   $('opt-ocr').addEventListener('change', async (event) => {
     state.ocrEnabled = event.target.checked;
