@@ -40,20 +40,9 @@ const BRASS = '#9a976d'; // --brass lifted 32% to white: 6.3:1 on the ground
 // A page seen at the angle a camera sees it, inside the brackets that find it.
 // Two ideas, because a third dissolves at 16px.
 const glyph = `
-  <path d="M150 128 L360 158 L340 386 L138 356 Z" fill="${PAPER}"/>
-  <g stroke="${RULE}" stroke-width="14" stroke-linecap="round">
-    <path d="M180 196 L322 216"/>
-    <path d="M176 244 L318 264"/>
-    <path d="M172 292 L268 306"/>
-  </g>
-  <g stroke="${BRASS}" stroke-width="18" stroke-linecap="round" fill="none">
-    <path d="M104 156 L104 108 L152 108"/>
-    <path d="M360 108 L408 108 L408 156"/>
-    <path d="M408 356 L408 404 L360 404"/>
-    <path d="M152 404 L104 404 L104 356"/>
-  </g>`;
+  <text x="256" y="256" font-family="sans-serif" font-weight="bold" font-size="200" fill="${PAPER}" text-anchor="middle" dominant-baseline="central">HC</text>`;
 
-const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="OpenDocScan">
+const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="HC Scanner">
   <rect width="512" height="512" rx="112" fill="${GROUND}"/>
 ${glyph}
 </svg>
@@ -61,7 +50,7 @@ ${glyph}
 
 // Launchers crop a maskable icon to any shape, so everything that must survive
 // sits inside the middle 80% and the ground bleeds to the edge.
-const maskableSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="OpenDocScan">
+const maskableSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="HC Scanner">
   <rect width="512" height="512" fill="${GROUND}"/>
   <g transform="translate(256 256) scale(0.68) translate(-256 -256)">
 ${glyph}
@@ -75,7 +64,7 @@ ${glyph}
 // legacy `ic_launcher` instead is what puts a square tile inside the
 // launcher's circular mask, which is how this looked next to every other app
 // on the first attempt.
-const foregroundSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="OpenDocScan">
+const foregroundSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="HC Scanner">
   <g transform="translate(256 256) scale(0.60) translate(-256 -256)">
 ${glyph}
   </g>

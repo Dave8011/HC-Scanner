@@ -90,7 +90,7 @@ def ensure_certificate(host: str) -> None:
             "x509_extensions = ext",
             "prompt = no",
             "[dn]",
-            "CN = OpenDocScan dev",
+            "CN = HC Scanner dev",
             "[ext]",
             "basicConstraints = critical, CA:FALSE",
             "keyUsage = critical, digitalSignature, keyEncipherment",
@@ -198,7 +198,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 def main() -> int:
     if PLAIN:
         server = http.server.ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-        print(f"OpenDocScan is serving at http://127.0.0.1:{PORT}/", flush=True)
+        print(f"HC Scanner is serving at http://127.0.0.1:{PORT}/", flush=True)
         print("No camera here — http on a non-localhost origin is not a secure", flush=True)
         print("context. Use `npm run serve:lan` for a phone. Ctrl-C to stop.", flush=True)
         return run(server)
@@ -221,7 +221,7 @@ def main() -> int:
     url = f"https://{host}:{PORT}/"
     print(
         f"""
-  OpenDocScan is serving at
+  HC Scanner is serving at
 
       {url}
 
@@ -234,7 +234,7 @@ def main() -> int:
     1. Open {url}dev-cert.pem in Safari and allow the profile download.
     2. Settings > General > VPN & Device Management > install it.
     3. Settings > General > About > Certificate Trust Settings >
-       switch on "OpenDocScan dev".
+       switch on "HC Scanner dev".
     4. Open {url}
 
   Android

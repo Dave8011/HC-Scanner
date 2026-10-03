@@ -1,7 +1,7 @@
 {
-  "name": "OpenDocScan",
-  "short_name": "DocScan",
-  "description": "Scan documents to PDF entirely on your device. No account, no watermark, no upload.",
+  "name": "HC Scanner",
+  "short_name": "HC Scanner",
+  "description": "Scan documents to PDF entirely on your device and save to HC Cloud.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

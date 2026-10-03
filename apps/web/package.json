@@ -1,8 +1,8 @@
 {
-  "name": "opendocscan-web",
+  "name": "hc-scanner-web",
   "private": true,
   "type": "module",
-  "description": "OpenDocScan as a local-only web app. Ships no runtime dependencies — everything below is for building and testing only.",
+  "description": "HC Scanner as a local-only web app. Ships no runtime dependencies — everything below is for building and testing only.",
   "scripts": {
     "build": "./scripts/build-wasm.sh",
     "serve": "python3 scripts/serve-lan.py --plain",

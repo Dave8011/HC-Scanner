@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>Account — OpenDocScan</title>
+    <title>Account — HC Scanner</title>
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#111111" />
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
@@ -12,9 +12,9 @@
     <!--
       The phone app's half of sign-in, and it has to run before anything else.
 
-      A native app has no page for an OAuth redirect to land on, so OpenDocScan
+      A native app has no page for an OAuth redirect to land on, so HC Scanner
       for Android and iOS sends the round trip here instead and this page
-      forwards the one-time code to `opendocscan://auth`. The alternative is
+      forwards the one-time code to `hcscanner://auth`. The alternative is
       pointing `return_to` straight at that custom scheme, which the account
       server would accept — but only after an entry is added to an
       `allowed_origins` list shared by every product in the suite, and applying
@@ -131,7 +131,7 @@
           <h1>Account</h1>
 
           <div class="account-note" id="native-handoff" hidden>
-            <p><strong>Finishing in the OpenDocScan app.</strong> You can close this tab.</p>
+            <p><strong>Finishing in the HC Scanner app.</strong> You can close this tab.</p>
             <p>
               Nothing happened?
               <button type="button" id="continue-here" class="linklike">Continue here instead</button>
@@ -139,7 +139,7 @@
           </div>
 
           <p class="account-note">
-            An account is <strong>optional</strong>. Every part of OpenDocScan — scanning,
+            An account is <strong>optional</strong>. Every part of HC Scanner — scanning,
             straightening, text recognition, exporting a PDF — runs on this device and works
             signed out, with no limit. Signing in carries credits across our apps; nothing
             here is behind it.
@@ -153,7 +153,7 @@
           <openapps-login
             variant="panel"
             mark="▤"
-            heading="Sign in to OpenDocScan"
+            heading="Sign in to HC Scanner"
             description="One account across our apps. You do not need it here — nothing on this page is behind it."
           ></openapps-login>
 
@@ -213,7 +213,7 @@
           });
         }
 
-        location.replace("opendocscan://auth" + hash);
+        location.replace("hcscanner://auth" + hash);
       })();
     </script>
 
