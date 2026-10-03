@@ -24,6 +24,31 @@ import {
   release,
 } from './scanner.js';
 
+import * as hcAuth from './hc-api/auth.js';
+import * as hcApi from './hc-api/api.js';
+
+let hcDrivesLoaded = false;
+async function populateHcUi() {
+  if (hcDrivesLoaded) return;
+  if (!hcAuth.getToken()) return;
+
+  try {
+    const drives = await hcApi.getDrives();
+    const select = $('hc-drive-select');
+    select.innerHTML = '<option value="">Select a drive...</option>';
+    drives.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.id;
+      opt.textContent = d.name;
+      select.append(opt);
+    });
+    hcDrivesLoaded = true;
+  } catch (error) {
+    console.error('Failed to load HC drives', error);
+    $('hc-drive-select').innerHTML = '<option value="">Error loading drives</option>';
+  }
+}
+
 const $ = (id) => document.getElementById(id);
 
 // Longest edge of the frame handed to live detection.
@@ -910,6 +935,7 @@ function updateTrayBadge() {
 function openTray() {
   show('tray');
   renderTray();
+  populateHcUi();
 }
 
 function renderTray() {
@@ -1080,6 +1106,66 @@ async function saveAndExport() {
     console.error(error);
     console.error('export failed', error);
     toast(t('export.failedKept'));
+  }
+}
+
+async function saveToHc() {
+  if (state.draft.length === 0) return;
+  
+  const driveId = $('hc-drive-select').value;
+  const folderPath = $('hc-folder-select').value;
+  
+  if (!driveId || !folderPath) {
+    toast('Please select a destination drive and folder.');
+    return;
+  }
+
+  const pending = state.draft.filter((p) => p.ocrPromise && !p.ocr && !p.ocrFailed);
+  if (pending.length > 0) {
+    busy(t('ocr.readingPages', { count: pending.length }));
+    await Promise.allSettled(pending.map((p) => p.ocrPromise));
+  }
+
+  busy('Generating PDF for HC Cloud...');
+  await paint();
+
+  const title = $('doc-title').value.trim() || t('library.untitled');
+  
+  try {
+    const pages = state.draft.map((page, index) => ({
+      id: page.id,
+      index,
+      blob: page.blob,
+      thumb: page.thumb,
+      width: page.width,
+      height: page.height,
+      ocr: page.ocr,
+      text: page.text,
+    }));
+
+    const pdf = await exportPdf(pages, {
+      paper: $('opt-paper').value,
+      margin: $('opt-paper').value === 'original' ? 0 : 18,
+      quality: Number($('opt-quality').value),
+      title,
+    });
+
+    busy('Uploading to HC Cloud...');
+    await hcApi.uploadScan(pdf, `${safeFileName(title)}.pdf`, driveId, folderPath);
+    
+    idle();
+    toast('Saved to HC Cloud successfully!');
+    
+    // Clear draft and go to library on success
+    state.draft = [];
+    updateTrayBadge();
+    await renderLibrary();
+    show('library');
+    
+  } catch (error) {
+    idle();
+    console.error('HC upload failed', error);
+    toast('Upload failed: ' + error.message);
   }
 }
 
@@ -1329,6 +1415,33 @@ function wire() {
     await renderLibrary();
   });
   $('btn-save').addEventListener('click', saveAndExport);
+  $('btn-hc-save').addEventListener('click', saveToHc);
+  
+  $('hc-drive-select').addEventListener('change', async (event) => {
+    const driveId = event.target.value;
+    const folderSelect = $('hc-folder-select');
+    if (!driveId) {
+      folderSelect.innerHTML = '<option value="">Select a drive first</option>';
+      folderSelect.disabled = true;
+      return;
+    }
+    
+    try {
+      folderSelect.innerHTML = '<option value="">Loading folders...</option>';
+      folderSelect.disabled = true;
+      const folders = await hcApi.getFolders(driveId);
+      folderSelect.innerHTML = '<option value="/">/ (Root)</option>';
+      folders.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.path;
+        opt.textContent = f.path;
+        folderSelect.append(opt);
+      });
+      folderSelect.disabled = false;
+    } catch (err) {
+      folderSelect.innerHTML = '<option value="">Failed to load folders</option>';
+    }
+  });
 
   $('opt-ocr').addEventListener('change', async (event) => {
     state.ocrEnabled = event.target.checked;
@@ -1377,6 +1490,7 @@ function wire() {
 // --- start -----------------------------------------------------------------
 
 async function main() {
+  hcAuth.initAuth();
   wire();
   updateTrayBadge();
 

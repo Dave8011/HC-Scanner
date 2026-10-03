@@ -167,6 +167,23 @@
 
         <div class="pad">
           <details class="settings">
+          <details class="settings-group" open>
+            <summary>HC Cloud Integration</summary>
+            <label class="field">
+              <span>Target Drive</span>
+              <select id="hc-drive-select">
+                <option value="">Loading drives...</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Target Folder</span>
+              <select id="hc-folder-select" disabled>
+                <option value="">Select a drive first</option>
+              </select>
+            </label>
+          </details>
+
+          <details class="settings-group">
             <summary>Export settings</summary>
             <label class="field">
               <span>Page size</span>
@@ -197,7 +214,8 @@
 
         <div class="dock">
           <button class="btn ghost" id="btn-add-page">Add page</button>
-          <button class="btn primary" id="btn-save">Save &amp; export</button>
+          <button class="btn ghost" id="btn-save">Download locally</button>
+          <button class="btn primary" id="btn-hc-save">Save to HC</button>
         </div>
       </section>
 

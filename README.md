@@ -1,6 +1,10 @@
-# OpenDocScan
+# HC-Scanner
 
-Photograph a document, get a real scan: straightened, cleaned, and searchable.
+**HC-Scanner** is the web-based document scanning engine for HC Cloud.
+
+> **Note**: This project is built upon and heavily uses the open-source [OpenDocScan](https://github.com/OpenDocScan/opendocscan) engine. All core scanning, perspective correction, binarization, and PDF generation logic is derived from OpenDocScan, which is available under the MIT / Apache-2.0 licenses. 
+> 
+> HC-Scanner integrates a secure `postMessage` authentication layer and a custom reverse-proxied API to save documents directly to the HC Agent backend.
 
 **[opendocscan.com](https://opendocscan.com)** — the scanner and everything about it, one page
 
