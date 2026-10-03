@@ -20,9 +20,9 @@
   --gray-500:#7c7c7c;
   --gray-600:#656565;
   --gray-700:#464646;
-  --gray-800:#3d3d3d;
-  --gray-900:#282828;
-  --gray-950:#1a1a1a;
+  --gray-800:#1e293b;
+  --gray-900:#0f172a;
+  --gray-950:#020617;
 
   --white-90:rgba(255,255,255,0.9);
   --white-80:rgba(255,255,255,0.8);
@@ -192,12 +192,12 @@
      --app-vidsub stays as a legacy alias so no existing surface breaks. */
   --app-opensubs:var(--accent-4);
   --app-vidsub:var(--app-opensubs);
-  /* OpenDocScan. Slot 20; see the note on --brass. */
-  --app-docscan:var(--accent-20);
+  /* HC Scanner. Uses the primary brand color. */
+  --app-docscan:var(--brand);
 
   /* ---- 3. Semantic aliases (use these) ---- */
-  --brand:var(--green);
-  --brand-strong:var(--green-600);
+  --brand:#3b82f6;
+  --brand-strong:#1d4ed8;
   --brand-soft:var(--green-50);
   --brand-contrast:var(--black);
 
@@ -271,13 +271,13 @@
   --text-muted:var(--white-60);
   --text-faint:var(--white-50);
   --text-inverse:var(--black);
-  --text-brand:var(--green);
+  --text-brand:var(--brand);
   --text-link:var(--white);
-  --text-link-hover:var(--green);
+  --text-link-hover:var(--brand);
   --border-hairline:var(--white-10);
   --border-strong:var(--white-20);
-  --border-focus:var(--green);
-  --brand-soft:color-mix(in oklab,var(--green) 20%,transparent);
+  --border-focus:var(--brand);
+  --brand-soft:color-mix(in oklab,var(--brand) 20%,transparent);
   --brand-contrast:var(--black);
   --success-bg:color-mix(in oklab,var(--green) 18%,transparent);
   --success-fg:var(--green);
@@ -287,7 +287,7 @@
   --warning-fg:var(--orange);
   --info-bg:color-mix(in oklab,var(--blue) 20%,transparent);
   --info-fg:var(--blue);
-  --focus-ring:0 0 0 2px var(--bg-page),0 0 0 4px var(--green);
+  --focus-ring:0 0 0 2px var(--bg-page),0 0 0 4px var(--brand);
   --logo-fg:var(--white);
   --logo-tile-bg:var(--white);
   --logo-tile-fg:var(--color-font);
