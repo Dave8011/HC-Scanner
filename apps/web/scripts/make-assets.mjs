@@ -155,7 +155,7 @@ const CARD = `<!doctype html>
 <body>
   <div class="brand">
     <img src="favicon.svg" alt="" />
-    <span><span class="prefix">Open</span>DocScan<span class="dot">.</span></span>
+    <span><span class="prefix">HC</span> Scanner<span class="dot">.</span></span>
   </div>
   <div>
     <h1>Photograph a document. Get a real scan.</h1>

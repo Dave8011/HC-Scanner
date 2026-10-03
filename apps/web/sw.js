@@ -73,7 +73,7 @@ self.addEventListener('activate', (event) => {
     (async () => {
       const keep = new Set([SHELL_CACHE, ASSET_CACHE]);
       for (const name of await caches.keys()) {
-        if (name.startsWith('opendocscan-') && !keep.has(name)) await caches.delete(name);
+        if (!keep.has(name)) await caches.delete(name);
       }
       await self.clients.claim();
       // Not awaited: the page is usable the moment the shell is, and this is
