@@ -72,9 +72,11 @@ body {
 }
 
 #app {
-  /* dvh so the layout adapts when the mobile browser chrome slides in/out */
+  height: 100vh;
   height: 100dvh;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 
@@ -224,7 +226,7 @@ body {
   padding: 10px 16px calc(10px + max(var(--safe-b), var(--browser-chrome, 0px)));
   border-top: 1px solid var(--line);
   background: var(--surface);
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .dock-note {

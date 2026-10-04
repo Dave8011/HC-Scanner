@@ -1177,8 +1177,9 @@ async function openCloudSave(pdfBlob, title, id, kept) {
   $('btn-cloud-save').disabled = true;
   
   try {
-    const drives = await hc.fetchDrives();
-    if (drives.length === 0) {
+    let drives = await hc.fetchDrives();
+    if (drives && drives.drives) drives = drives.drives;
+    if (!drives || drives.length === 0) {
       $('cloud-status-msg').textContent = 'No drives available.';
       return;
     }
@@ -1205,8 +1206,9 @@ async function loadCloudFolders() {
   $('btn-cloud-save').disabled = true;
   
   try {
-    const folders = await hc.fetchFolders(driveId);
-    if (folders.length === 0) {
+    let folders = await hc.fetchFolders(driveId);
+    if (folders && folders.folders) folders = folders.folders;
+    if (!folders || folders.length === 0) {
       $('cloud-status-msg').textContent = 'Empty folder.';
     } else {
       $('cloud-status-msg').textContent = '';
@@ -1224,13 +1226,16 @@ async function loadCloudFolders() {
 }
 
 function handleHcError(err) {
+  console.error("HC Cloud Error:", err);
   $('btn-cloud-save').disabled = true;
-  const msg = err.message;
+  const msg = err.message || '';
   if (msg === '401') {
+    // Show specific message for missing/expired auth
+    $('cloud-status-msg').textContent = 'Your HC Cloud session has expired. Reopen Scanner from HC Cloud.';
     $('cloud-auth-required').hidden = false;
     $('cloud-storage-ui').hidden = true;
   } else if (msg === '403') {
-    $('cloud-status-msg').textContent = 'Permission denied.';
+    $('cloud-status-msg').textContent = 'You don\'t have permission to save here.';
   } else if (msg === '404') {
     $('cloud-status-msg').textContent = 'Storage location unavailable.';
   } else if (msg === '409') {
@@ -1240,7 +1245,8 @@ function handleHcError(err) {
   } else if (msg === '500') {
     $('cloud-status-msg').textContent = 'HC Cloud could not save the document.';
   } else {
-    $('cloud-status-msg').textContent = 'Unable to connect to HC Cloud.';
+    // Handle TypeError (Failed to fetch) or other errors safely
+    $('cloud-status-msg').textContent = 'HC Cloud is temporarily unavailable. Please try again.';
   }
 }
 
