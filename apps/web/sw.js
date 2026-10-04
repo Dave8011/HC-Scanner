@@ -7,7 +7,7 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'hc-rebrand-v1';
+const VERSION = 'hc-rebrand-v2';
 const SHELL_CACHE = `hcscanner-shell-${VERSION}`;
 const ASSET_CACHE = `hcscanner-assets-${VERSION}`;
 
@@ -34,6 +34,7 @@ const SHELL = [
   'src/styles.css',
   'src/site.css',
   'src/app.js',
+  'src/hc.js',
   // app.js imports this at module scope, so a shell without it is not a
   // degraded offline app — it is one that throws before it renders.
   'src/i18n.js',
@@ -134,6 +135,11 @@ async function warmOcr() {
 const ACCOUNT_ORIGIN = 'https://auth.opendocscan.com';
 const ACCOUNT_PAGES = ['/account', '/account.html'];
 
+const HC_API_ORIGINS = [
+  'https://api.hcdavecloud.in',
+  'http://localhost:3001'
+];
+
 function blocked(href) {
   console.warn('[sw] blocked a cross-origin request:', href);
   return new Response('HC Scanner does not make requests to other servers.', {
@@ -165,6 +171,11 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) {
     if (url.origin === ACCOUNT_ORIGIN) {
       event.respondWith(accountRequest(event, request));
+      return;
+    }
+    if (HC_API_ORIGINS.includes(url.origin)) {
+      // Allow HC Cloud API requests through
+      event.respondWith(fetch(request));
       return;
     }
     event.respondWith(blocked(request.url));
