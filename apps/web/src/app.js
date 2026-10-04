@@ -467,7 +467,7 @@ async function capture() {
     frame = imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
     noteCapture('frame', video.videoWidth, video.videoHeight, frame.width, frame.height);
   }
-  await openCrop(frame);
+  await openCrop(frame, false);
 }
 
 /// What the last press of the shutter actually produced.
@@ -537,7 +537,7 @@ async function onFilesPicked(files) {
     try {
       const frame = await blobToImageData(images[0], PAGE_MAX_EDGE);
       idle();
-      await openCrop(frame);
+      await openCrop(frame, true);
     } catch {
       idle();
       toast(t('import.notImage'));
@@ -580,7 +580,7 @@ async function onFilesPicked(files) {
 
 // --- crop ------------------------------------------------------------------
 
-async function openCrop(frame) {
+async function openCrop(frame, isImport = false) {
   const { width, height } = frame;
 
   // The frame lives as ImageData, which only `putImageData` can draw — and
@@ -609,6 +609,7 @@ async function openCrop(frame) {
     buffer,
     corners: detected ?? insetQuad(width, height),
     dragging: -1,
+    isImport,
   };
   show('crop');
   drawCrop();
@@ -631,12 +632,16 @@ function insetQuad(width, height) {
 
 function cropFit() {
   const canvas = $('crop-canvas');
-  return containRect(state.crop.frame.width, state.crop.frame.height, canvas.width, canvas.height);
+  if (state.crop.isImport) {
+    return containRect(state.crop.frame.width, state.crop.frame.height, canvas.width, canvas.height);
+  }
+  return coverRect(state.crop.frame.width, state.crop.frame.height, canvas.width, canvas.height);
 }
 
 function drawCrop() {
   const canvas = $('crop-canvas');
   const stage = $('crop-stage');
+
   const rect = stage.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -648,8 +653,10 @@ function drawCrop() {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const { frame, buffer, corners } = state.crop;
-  const fit = containRect(frame.width, frame.height, canvas.width, canvas.height);
+  const { frame, buffer, corners, isImport } = state.crop;
+  const fit = isImport 
+    ? containRect(frame.width, frame.height, canvas.width, canvas.height)
+    : coverRect(frame.width, frame.height, canvas.width, canvas.height);
   ctx.drawImage(buffer, fit.x, fit.y, fit.width, fit.height);
 
   const toCanvas = (corner) => ({
@@ -747,6 +754,8 @@ function onCropUp() {
 }
 
 async function confirmCrop() {
+  const btn = $('btn-crop-confirm');
+  btn.disabled = true;
   const { corners } = state.crop;
   busy(t('crop.straightening'));
   await paint();
@@ -762,6 +771,8 @@ async function confirmCrop() {
     idle();
     console.error('rectify failed', error);
     toast(t('crop.badCorners'));
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -822,6 +833,8 @@ async function renderFilter() {
 async function confirmFilter() {
   const { source, name, brightness, rotation } = state.filter;
   if (!source) return;
+  const btn = $('btn-filter-confirm');
+  btn.disabled = true;
   busy(t('page.adding'));
   await paint();
   try {
@@ -835,6 +848,7 @@ async function confirmFilter() {
     console.error('addPage failed', error);
     toast(t('page.addFailed'));
   } finally {
+    btn.disabled = false;
     // The scan is over either way: a page was added, or it failed and the
     // user is being told so. Nothing downstream refers to these again.
     await releaseScanSlots();
@@ -918,7 +932,25 @@ function renderTray() {
   replaceAndReleaseUrls(list);
 
   $('tray-title').textContent = t('pages.count', { count: state.draft.length });
-  $('btn-save').disabled = state.draft.length === 0;
+  
+  const hasAuth = hc.getAuthState();
+  const btnSave = $('btn-save');
+  const btnSaveLocal = $('btn-save-local');
+  const hint = $('tray-cloud-hint');
+  
+  if (hint) hint.hidden = hasAuth;
+  
+  if (btnSaveLocal) {
+    btnSaveLocal.hidden = !hasAuth;
+    btnSave.textContent = hasAuth ? 'Save to HC Cloud' : 'Save & export';
+    btnSave.style.flex = hasAuth ? '1' : '1';
+    btnSaveLocal.style.flex = hasAuth ? '1' : 'none';
+  } else {
+    btnSave.textContent = hasAuth ? 'Save to HC Cloud' : 'Save & export';
+  }
+
+  btnSave.disabled = state.draft.length === 0;
+  if (btnSaveLocal) btnSaveLocal.disabled = state.draft.length === 0;
 
   state.draft.forEach((page, index) => {
     const item = document.createElement('div');
@@ -988,8 +1020,12 @@ function movePage(index, delta) {
 
 let cloudSaveContext = null;
 
-async function saveAndExport() {
+async function saveAndExport(skipCloud = false) {
   if (state.draft.length === 0) return;
+  
+  $('btn-save').disabled = true;
+  const btnSaveLocal = $('btn-save-local');
+  if (btnSaveLocal) btnSaveLocal.disabled = true;
 
   const pending = state.draft.filter((p) => p.ocrPromise && !p.ocr && !p.ocrFailed);
   if (pending.length > 0) {
@@ -1069,11 +1105,21 @@ async function saveAndExport() {
       await renderLibrary();
     }
 
-    // Hand over to the HC Cloud Save UI instead of immediately downloading
-    openCloudSave(pdf, title, id, kept);
+    if (skipCloud === true || !hc.getAuthState()) {
+      // Just download locally.
+      const filename = `${safeFileName(title)}.pdf`;
+      await offerFile(pdf, filename);
+      if (kept) await openDocument(id);
+    } else {
+      // Hand over to the HC Cloud Save UI instead of immediately downloading
+      openCloudSave(pdf, title, id, kept);
+    }
 
   } catch (error) {
     idle();
+    $('btn-save').disabled = false;
+    const btnSaveLocal = $('btn-save-local');
+    if (btnSaveLocal) btnSaveLocal.disabled = false;
     console.error(error);
     console.error('export failed', error);
     toast(t('export.failedKept'));
@@ -1467,6 +1513,16 @@ function wire() {
     await renderLibrary();
   });
   $('btn-save').addEventListener('click', saveAndExport);
+  const btnSaveLocal = $('btn-save-local');
+  if (btnSaveLocal) {
+    btnSaveLocal.addEventListener('click', () => {
+      // Local save bypasses the cloud save UI completely.
+      // We can reuse saveAndExport by temporarily blocking the cloud save UI transition?
+      // Actually, saveAndExport opens Cloud Save based on hc.getAuthState().
+      // Let's modify saveAndExport to accept a `skipCloud` parameter.
+      saveAndExport(true);
+    });
+  }
   
   // HC Cloud Integration Events
   $('btn-cloud-back').addEventListener('click', openTray);
