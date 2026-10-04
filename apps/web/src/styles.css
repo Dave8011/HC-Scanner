@@ -223,7 +223,7 @@ body {
      `env(safe-area-inset-bottom)`, which is 0 there outside a home-screen app —
      so this row was underneath it, with Add page showing a sliver of green and
      nothing else. Whichever of the two is larger wins; both are 0 on a desktop. */
-  padding: 10px 16px calc(10px + max(var(--safe-b), var(--browser-chrome, 0px)));
+  padding: 10px 16px calc(10px + var(--safe-b));
   border-top: 1px solid var(--line);
   background: var(--surface);
   flex-wrap: wrap;
