@@ -146,6 +146,7 @@ export function uploadDocument(file, driveId, folderId, filename, onProgress) {
     
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
+        if (typeof onProgress === 'function') onProgress(100);
         resolve();
       } else {
         reject(new Error(xhr.status.toString()));

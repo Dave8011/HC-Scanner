@@ -84,6 +84,7 @@ const state = {
   filter: { source: null, preview: null, name: 'enhance', brightness: 0, rotation: 0 },
   ocrEnabled: true,
   openDoc: null,
+  documentKind: 'scan',
   importTarget: 'draft',
   objectUrls: new Set(),
 };
@@ -467,6 +468,7 @@ async function capture() {
     frame = imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
     noteCapture('frame', video.videoWidth, video.videoHeight, frame.width, frame.height);
   }
+  state.documentKind = 'scan';
   await openCrop(frame);
 }
 
@@ -528,8 +530,6 @@ async function onFilesPicked(files) {
   if (images.length === 0) return;
 
   // One image goes straight to the corner editor, the way a capture does.
-  // A batch is taken at face value — someone importing twelve photos is
-  // not asking to confirm twelve sets of corners — and detection is
   // applied per image without stopping to ask.
   if (images.length === 1) {
     busy(t('import.opening'));
@@ -537,6 +537,8 @@ async function onFilesPicked(files) {
     try {
       const frame = await blobToImageData(images[0], PAGE_MAX_EDGE);
       idle();
+      state.documentKind = 'image';
+      state.documentOriginalType = images[0].type;
       await openCrop(frame);
     } catch {
       idle();
@@ -545,6 +547,7 @@ async function onFilesPicked(files) {
     return;
   }
 
+  state.documentKind = 'scan';
   busy(t('import.importing', { count: images.length }));
   await paint();
   let added = 0;
@@ -887,7 +890,11 @@ async function addPage(imageData, filterName, brightness) {
   // edges between two values, which is exactly what JPEG destroys — and
   // what the PDF writer then packs a bit per pixel, so a JPEG here would
   // bake in artefacts the export would faithfully preserve.
-  const type = filterName === 'bw' ? 'image/png' : 'image/jpeg';
+  let type = filterName === 'bw' ? 'image/png' : 'image/jpeg';
+  if (state.documentKind === 'image' && state.documentOriginalType) {
+    type = state.documentOriginalType;
+  }
+  
   const { width, height } = imageData;
   // Held once and encoded twice. Both encodes — including the thumbnail's
   // downscale — happen in the worker, so the main thread never runs a
@@ -1089,12 +1096,27 @@ async function saveAndExport(skipCloud = false) {
       text: page.text,
     }));
 
-    const pdf = await exportPdf(pages, {
-      paper: $('opt-paper').value,
-      margin: $('opt-paper').value === 'original' ? 0 : 18,
-      quality: Number($('opt-quality').value),
-      title,
-    });
+    const isImageExport = state.draft.length === 1 && state.documentKind === 'image';
+    let fileBlob;
+    let filename;
+    
+    if (isImageExport) {
+      fileBlob = state.draft[0].blob;
+      let ext = 'jpg';
+      if (fileBlob.type === 'image/png') ext = 'png';
+      else if (fileBlob.type === 'image/webp') ext = 'webp';
+      else if (fileBlob.type === 'image/gif') ext = 'gif';
+      
+      filename = `${safeFileName(title)}.${ext}`;
+    } else {
+      fileBlob = await exportPdf(pages, {
+        paper: $('opt-paper').value,
+        margin: $('opt-paper').value === 'original' ? 0 : 18,
+        quality: Number($('opt-quality').value),
+        title,
+      });
+      filename = `${safeFileName(title)}.pdf`;
+    }
 
     // Attempted before the file is offered, so a share sheet dismissed or a
     // download cancelled still leaves the document in the library — but not
@@ -1133,12 +1155,11 @@ async function saveAndExport(skipCloud = false) {
 
     if (skipCloud === true || !hc.getAuthState()) {
       // Just download locally.
-      const filename = `${safeFileName(title)}.pdf`;
-      await offerFile(pdf, filename);
+      await offerFile(fileBlob, filename);
       if (kept) await openDocument(id);
     } else {
       // Hand over to the HC Cloud Save UI instead of immediately downloading
-      openCloudSave(pdf, title, id, kept);
+      openCloudSave(fileBlob, title, id, kept, filename);
     }
 
   } catch (error) {
@@ -1150,9 +1171,9 @@ async function saveAndExport(skipCloud = false) {
   }
 }
 
-async function openCloudSave(pdfBlob, title, id, kept) {
-  cloudSaveContext = { pdfBlob, title, id, kept };
-  $('cloud-doc-title').value = title + '.pdf';
+async function openCloudSave(blob, title, id, kept, filename) {
+  cloudSaveContext = { blob, title, id, kept, filename };
+  $('cloud-doc-title').value = filename;
   
   $('cloud-auth-required').hidden = true;
   $('cloud-storage-ui').hidden = true;
@@ -1251,13 +1272,19 @@ function handleHcError(err) {
 }
 
 async function onCloudSaveClick() {
-  let filename = $('cloud-doc-title').value.trim();
-  filename = filename.replace(/[^\p{L}\p{N} ._-]/gu, '').trim();
-  if (!filename) filename = 'Scanned_Document';
-  if (!filename.toLowerCase().endsWith('.pdf')) {
-    filename += '.pdf';
-  }
+  let titleInput = $('cloud-doc-title').value.trim();
+  if (!titleInput) titleInput = 'Scanned_Document';
   
+  const ext = cloudSaveContext.filename.split('.').pop();
+  
+  if (!titleInput.toLowerCase().endsWith('.' + ext)) {
+    titleInput = `${titleInput.replace(/[^\p{L}\p{N} ._-]/gu, '').trim()}.${ext}`;
+  } else {
+    titleInput = titleInput.replace(/[^\p{L}\p{N} ._-]/gu, '').trim();
+  }
+  if (!titleInput || titleInput === '.' + ext) titleInput = 'Scanned_Document.' + ext;
+  
+  const filename = titleInput;
   const driveId = $('cloud-drive-select').value;
   const folderId = $('cloud-folder-select').value;
   
@@ -1270,7 +1297,7 @@ async function onCloudSaveClick() {
   $('btn-cloud-download').disabled = true;
   
   try {
-    await hc.uploadDocument(cloudSaveContext.pdfBlob, driveId, folderId, filename, (pct) => {
+    await hc.uploadDocument(cloudSaveContext.blob, driveId, folderId, filename, (pct) => {
       $('cloud-upload-pct').textContent = `${pct}%`;
       $('cloud-upload-progress-bar').style.width = `${pct}%`;
     });
@@ -1287,8 +1314,8 @@ async function onCloudSaveClick() {
 }
 
 async function onCloudDownloadClick() {
-  const filename = safeFileName(cloudSaveContext.title) + '.pdf';
-  await offerFile(cloudSaveContext.pdfBlob, filename);
+  const filename = cloudSaveContext.filename;
+  await offerFile(cloudSaveContext.blob, filename);
   if (cloudSaveContext.kept) {
     await openDocument(cloudSaveContext.id);
   } else {
