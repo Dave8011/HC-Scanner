@@ -143,19 +143,22 @@
           </label>
         </div>
 
+        <!-- Two actions: add another page (secondary) or finish this page (primary) -->
         <div class="dock">
-          <button class="btn primary" id="btn-filter-confirm">Add page</button>
+          <button class="btn ghost" id="btn-filter-add-page">+ Add page</button>
+          <button class="btn primary" id="btn-filter-confirm">Continue →</button>
         </div>
       </section>
 
-      <!-- Page tray ---------------------------------------------------- -->
+      <!-- Document Review (Page tray) ---------------------------------- -->
       <section class="view" id="view-tray" data-view="tray" hidden>
         <header class="bar">
           <button class="icon-btn" id="btn-tray-back" aria-label="Back to camera">←</button>
-          <h2 id="tray-title">Pages</h2>
+          <h2 id="tray-title">Review</h2>
           <button class="text-btn" id="btn-tray-discard">Discard</button>
         </header>
 
+        <!-- Document name at the top -->
         <div class="pad">
           <label class="field">
             <span>Document name</span>
@@ -163,9 +166,16 @@
           </label>
         </div>
 
+        <!-- Page thumbnails scroll area -->
         <div id="tray-list" class="tray"></div>
 
-        <div class="pad">
+        <!-- Add another page link -->
+        <div class="tray-add-row">
+          <button class="btn ghost tray-add-btn" id="btn-add-page">+ Add another page</button>
+        </div>
+
+        <!-- Export settings collapsed -->
+        <div class="pad tray-settings-pad">
           <details class="settings">
             <summary>Export settings</summary>
             <label class="field">
@@ -195,56 +205,64 @@
           </details>
         </div>
 
-        <div class="pad" style="text-align: center; padding-bottom: 8px;">
-          <p class="dock-note" id="tray-cloud-hint" hidden style="margin-bottom: 12px;">Open HC Scanner from HC Cloud to save directly to your server.</p>
-          <button class="text-btn" id="btn-add-page" style="font-weight: 500;">+ Add another page</button>
-        </div>
-
+        <!-- Save actions: adjusted dynamically by renderTray() -->
         <div class="dock">
+          <!-- btn-save-local: shown only when NOT authenticated (standalone mode) -->
+          <!-- btn-save: "Save to HC Cloud" when auth, "Save & export" when standalone -->
           <button class="btn ghost" id="btn-save-local">Download Locally</button>
-          <button class="btn primary" id="btn-save" style="flex: 1;">Save &amp; export</button>
+          <button class="btn primary" id="btn-save">Save &amp; export</button>
         </div>
       </section>
+
       <!-- Cloud Save --------------------------------------------------- -->
-      <section class="view" id="view-cloud-save" data-view="cloud-save" hidden>
+      <section class="view is-scrollable" id="view-cloud-save" data-view="cloud-save" hidden>
         <header class="bar">
           <button class="icon-btn" id="btn-cloud-back" aria-label="Back to pages">←</button>
-          <h2>Save scan</h2>
+          <h2>Save to HC Cloud</h2>
           <span class="icon-btn" style="visibility: hidden"></span>
         </header>
 
-        <div class="pad">
-          <label class="field">
-            <span>Document name</span>
-            <input type="text" id="cloud-doc-title" value="Scanned_Document.pdf" autocomplete="off" />
-          </label>
-        </div>
+        <div class="cloud-save-body">
+          <div class="pad">
+            <label class="field">
+              <span>Document name</span>
+              <input type="text" id="cloud-doc-title" value="Scanned_Document.pdf" autocomplete="off" />
+            </label>
+          </div>
 
-        <div class="pad" id="cloud-ui-container">
-          <div id="cloud-auth-required" hidden>
-            <p><strong>Authentication Required</strong></p>
-            <p>Your HC Cloud session has expired. Please reopen Scanner from HC Cloud.</p>
+          <div class="pad" id="cloud-ui-container">
+            <!-- No auth: shown when Scanner opened directly (no HC Cloud handshake) -->
+            <div id="cloud-auth-required" hidden>
+              <div class="cloud-info-box">
+                <p><strong>Not connected to HC Cloud</strong></p>
+                <p>Open HC Scanner from HC Cloud to save directly to your server.</p>
+              </div>
+            </div>
+
+            <!-- Auth OK: drive + folder pickers -->
+            <div id="cloud-storage-ui" hidden>
+              <label class="field">
+                <span>Target Drive</span>
+                <select id="cloud-drive-select"></select>
+              </label>
+              <label class="field">
+                <span>Target Folder</span>
+                <select id="cloud-folder-select"></select>
+              </label>
+              <p id="cloud-status-msg" class="cloud-status-msg"></p>
+            </div>
           </div>
-          
-          <div id="cloud-storage-ui" hidden>
-            <label class="field">
-              <span>Target Drive</span>
-              <select id="cloud-drive-select"></select>
-            </label>
-            <label class="field">
-              <span>Target Folder</span>
-              <select id="cloud-folder-select"></select>
-            </label>
-            <p id="cloud-status-msg" style="color: var(--text-muted); font-size: 14px; margin-top: 8px;"></p>
+
+          <!-- Upload progress -->
+          <div class="pad" id="cloud-upload-ui" hidden>
+            <div class="upload-progress-card">
+              <p id="cloud-upload-title" class="upload-title">Uploading document…</p>
+              <div class="upload-bar-track">
+                <div id="cloud-upload-progress-bar" class="upload-bar-fill"></div>
+              </div>
+              <p id="cloud-upload-pct" class="upload-pct">0%</p>
+            </div>
           </div>
-        </div>
-        
-        <div class="pad" id="cloud-upload-ui" hidden style="text-align: center;">
-          <h3 id="cloud-upload-title" style="margin-bottom: 8px;">Uploading document...</h3>
-          <div style="background: var(--surface-active); border-radius: 4px; overflow: hidden; height: 8px; margin-bottom: 8px;">
-            <div id="cloud-upload-progress-bar" style="background: var(--brand); height: 100%; width: 0%;"></div>
-          </div>
-          <p id="cloud-upload-pct" style="color: var(--text-muted);">0%</p>
         </div>
 
         <div class="dock">

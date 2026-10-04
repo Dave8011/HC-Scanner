@@ -467,7 +467,7 @@ async function capture() {
     frame = imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
     noteCapture('frame', video.videoWidth, video.videoHeight, frame.width, frame.height);
   }
-  await openCrop(frame, false);
+  await openCrop(frame);
 }
 
 /// What the last press of the shutter actually produced.
@@ -537,7 +537,7 @@ async function onFilesPicked(files) {
     try {
       const frame = await blobToImageData(images[0], PAGE_MAX_EDGE);
       idle();
-      await openCrop(frame, true);
+      await openCrop(frame);
     } catch {
       idle();
       toast(t('import.notImage'));
@@ -580,7 +580,7 @@ async function onFilesPicked(files) {
 
 // --- crop ------------------------------------------------------------------
 
-async function openCrop(frame, isImport = false) {
+async function openCrop(frame) {
   const { width, height } = frame;
 
   // The frame lives as ImageData, which only `putImageData` can draw — and
@@ -609,7 +609,6 @@ async function openCrop(frame, isImport = false) {
     buffer,
     corners: detected ?? insetQuad(width, height),
     dragging: -1,
-    isImport,
   };
   show('crop');
   drawCrop();
@@ -632,16 +631,15 @@ function insetQuad(width, height) {
 
 function cropFit() {
   const canvas = $('crop-canvas');
-  if (state.crop.isImport) {
-    return containRect(state.crop.frame.width, state.crop.frame.height, canvas.width, canvas.height);
-  }
-  return coverRect(state.crop.frame.width, state.crop.frame.height, canvas.width, canvas.height);
+  // Always use containRect for crop: the drag-corner math in onCropMove also
+  // uses containRect and the two must agree exactly, otherwise dragging a
+  // corner moves a different part of the image from what the finger touches.
+  return containRect(state.crop.frame.width, state.crop.frame.height, canvas.width, canvas.height);
 }
 
 function drawCrop() {
   const canvas = $('crop-canvas');
   const stage = $('crop-stage');
-
   const rect = stage.getBoundingClientRect();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
@@ -653,10 +651,8 @@ function drawCrop() {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const { frame, buffer, corners, isImport } = state.crop;
-  const fit = isImport 
-    ? containRect(frame.width, frame.height, canvas.width, canvas.height)
-    : coverRect(frame.width, frame.height, canvas.width, canvas.height);
+  const { frame, buffer, corners } = state.crop;
+  const fit = containRect(frame.width, frame.height, canvas.width, canvas.height);
   ctx.drawImage(buffer, fit.x, fit.y, fit.width, fit.height);
 
   const toCanvas = (corner) => ({
@@ -830,6 +826,8 @@ async function renderFilter() {
   }
 }
 
+// Called by the primary "Continue →" button on the filter/cleanup screen.
+// Finishes processing the current page and goes to the Document Review screen.
 async function confirmFilter() {
   const { source, name, brightness, rotation } = state.filter;
   if (!source) return;
@@ -842,6 +840,7 @@ async function confirmFilter() {
     const page = await applyFilter({ slot: 'filter-source' }, name, brightness, rotation);
     await addPage(page, name, brightness);
     idle();
+    // Go to Document Review — the user is done with this page.
     openTray();
   } catch (error) {
     idle();
@@ -851,6 +850,32 @@ async function confirmFilter() {
     btn.disabled = false;
     // The scan is over either way: a page was added, or it failed and the
     // user is being told so. Nothing downstream refers to these again.
+    await releaseScanSlots();
+  }
+}
+
+// Called by the secondary "+ Add page" button on the filter/cleanup screen.
+// Saves the current filter choice then adds this page and goes back to camera.
+async function filterAddPage() {
+  const { source, name, brightness, rotation } = state.filter;
+  if (!source) return;
+  const btn = $('btn-filter-add-page');
+  btn.disabled = true;
+  busy(t('page.adding'));
+  await paint();
+  try {
+    const page = await applyFilter({ slot: 'filter-source' }, name, brightness, rotation);
+    await addPage(page, name, brightness);
+    idle();
+    // Go back to the camera to capture the next page.
+    show('capture');
+    await startCamera();
+  } catch (error) {
+    idle();
+    console.error('addPage failed', error);
+    toast(t('page.addFailed'));
+  } finally {
+    btn.disabled = false;
     await releaseScanSlots();
   }
 }
@@ -931,26 +956,26 @@ function renderTray() {
   const list = $('tray-list');
   replaceAndReleaseUrls(list);
 
-  $('tray-title').textContent = t('pages.count', { count: state.draft.length });
-  
+  const count = state.draft.length;
+  $('tray-title').textContent = count === 1 ? '1 page' : `${count} pages`;
+
   const hasAuth = hc.getAuthState();
   const btnSave = $('btn-save');
   const btnSaveLocal = $('btn-save-local');
-  const hint = $('tray-cloud-hint');
-  
-  if (hint) hint.hidden = hasAuth;
-  
-  if (btnSaveLocal) {
-    btnSaveLocal.hidden = !hasAuth;
-    btnSave.textContent = hasAuth ? 'Save to HC Cloud' : 'Save & export';
-    btnSave.style.flex = hasAuth ? '1' : '1';
-    btnSaveLocal.style.flex = hasAuth ? '1' : 'none';
+
+  if (hasAuth) {
+    // Authenticated: primary = Save to HC Cloud, secondary = Download Locally
+    btnSave.textContent = 'Save to HC Cloud';
+    btnSaveLocal.hidden = false;
   } else {
-    btnSave.textContent = hasAuth ? 'Save to HC Cloud' : 'Save & export';
+    // Standalone: primary = Save & export (local), hide the "Download Locally" ghost
+    // (it would be a confusing duplicate — both buttons do the same thing)
+    btnSave.textContent = 'Save & export';
+    btnSaveLocal.hidden = true;
   }
 
-  btnSave.disabled = state.draft.length === 0;
-  if (btnSaveLocal) btnSaveLocal.disabled = state.draft.length === 0;
+  btnSave.disabled = count === 0;
+  btnSaveLocal.disabled = count === 0;
 
   state.draft.forEach((page, index) => {
     const item = document.createElement('div');
@@ -1020,12 +1045,13 @@ function movePage(index, delta) {
 
 let cloudSaveContext = null;
 
+// skipCloud=true: always download locally regardless of auth state.
+// skipCloud=false (default): go to cloud save if authenticated, else download locally.
 async function saveAndExport(skipCloud = false) {
   if (state.draft.length === 0) return;
-  
+
   $('btn-save').disabled = true;
-  const btnSaveLocal = $('btn-save-local');
-  if (btnSaveLocal) btnSaveLocal.disabled = true;
+  $('btn-save-local').disabled = true;
 
   const pending = state.draft.filter((p) => p.ocrPromise && !p.ocr && !p.ocrFailed);
   if (pending.length > 0) {
@@ -1118,9 +1144,7 @@ async function saveAndExport(skipCloud = false) {
   } catch (error) {
     idle();
     $('btn-save').disabled = false;
-    const btnSaveLocal = $('btn-save-local');
-    if (btnSaveLocal) btnSaveLocal.disabled = false;
-    console.error(error);
+    $('btn-save-local').disabled = false;
     console.error('export failed', error);
     toast(t('export.failedKept'));
   }
@@ -1490,12 +1514,16 @@ function wire() {
     show('crop');
     drawCrop();
   });
+  // "Continue →" — finish this page and go to Document Review
   $('btn-filter-confirm').addEventListener('click', confirmFilter);
+  // "+ Add page" — save this page and immediately go back to camera for the next
+  $('btn-filter-add-page').addEventListener('click', filterAddPage);
 
   $('btn-tray-back').addEventListener('click', async () => {
     show('capture');
     await startCamera();
   });
+  // "+ Add another page" on the Document Review screen — go back to camera
   $('btn-add-page').addEventListener('click', async () => {
     show('capture');
     await startCamera();
@@ -1512,17 +1540,10 @@ function wire() {
     show('library');
     await renderLibrary();
   });
-  $('btn-save').addEventListener('click', saveAndExport);
-  const btnSaveLocal = $('btn-save-local');
-  if (btnSaveLocal) {
-    btnSaveLocal.addEventListener('click', () => {
-      // Local save bypasses the cloud save UI completely.
-      // We can reuse saveAndExport by temporarily blocking the cloud save UI transition?
-      // Actually, saveAndExport opens Cloud Save based on hc.getAuthState().
-      // Let's modify saveAndExport to accept a `skipCloud` parameter.
-      saveAndExport(true);
-    });
-  }
+  // Primary save button: goes to HC Cloud if authenticated, else downloads locally
+  $('btn-save').addEventListener('click', () => saveAndExport(false));
+  // Secondary: always download locally (only shown when authenticated)
+  $('btn-save-local').addEventListener('click', () => saveAndExport(true));
   
   // HC Cloud Integration Events
   $('btn-cloud-back').addEventListener('click', openTray);

@@ -38,7 +38,7 @@
   --good: var(--success-fg);
 
   --radius: var(--radius-lg);
-  --dock-h: 88px;
+  --dock-h: 80px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
 
@@ -72,6 +72,7 @@ body {
 }
 
 #app {
+  /* dvh so the layout adapts when the mobile browser chrome slides in/out */
   height: 100dvh;
   position: relative;
 }
@@ -220,10 +221,10 @@ body {
      `env(safe-area-inset-bottom)`, which is 0 there outside a home-screen app —
      so this row was underneath it, with Add page showing a sliver of green and
      nothing else. Whichever of the two is larger wins; both are 0 on a desktop. */
-  padding: 12px 16px calc(12px + max(var(--safe-b), var(--browser-chrome, 0px)));
+  padding: 10px 16px calc(10px + max(var(--safe-b), var(--browser-chrome, 0px)));
   border-top: 1px solid var(--line);
   background: var(--surface);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .dock-note {
@@ -237,13 +238,17 @@ body {
 .btn {
   border: 1px solid transparent;
   border-radius: var(--radius);
-  padding: 12px 18px;
+  padding: 12px 16px;
   font: inherit;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
   min-height: 46px;
   flex: 1 1 0;
-  max-width: 260px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .btn.primary {
@@ -283,13 +288,16 @@ body {
 /* --- camera / crop stage ----------------------------------------------- */
 
 .stage {
-  flex: 1 1 auto;
+  /* flex: 1 1 0 with min-height: 0 is the key to preventing the stage from
+     growing past the viewport. Without min-height: 0, a flex child can overflow
+     the flex container, causing black empty areas on mobile. */
+  flex: 1 1 0;
+  min-height: 0;
   position: relative;
   display: grid;
   place-items: center;
   background: #000;
   overflow: hidden;
-  min-height: 0;
   touch-action: none;
 }
 
@@ -303,7 +311,7 @@ body {
 #video {
   /* Absolutely placed, not a 100%-high grid item. `height: 100%` has to
      resolve against the stage, and the stage is a flex child with
-     `flex: 1 1 auto` — iOS Safari does not resolve that, so the element fell
+     `flex: 1 1 0` — iOS Safari does not resolve that, so the element fell
      back to the height its own aspect ratio implied, came out shorter than the
      stage, and left a black band across the top with the picture below it. The
      overlay is already `inset: 0`, so this also puts the two in exactly the
@@ -344,6 +352,7 @@ body {
   font-size: 13px;
   backdrop-filter: blur(6px);
   transition: opacity 0.2s;
+  white-space: nowrap;
 }
 
 .stage-note.is-locked {
@@ -354,9 +363,9 @@ body {
 
 .controls {
   flex: 0 0 auto;
-  padding: 12px 16px 0;
+  padding: 10px 16px 0;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .chips {
@@ -370,7 +379,7 @@ body {
   background: var(--surface-2);
   color: var(--ink);
   border-radius: 999px;
-  padding: 9px 16px;
+  padding: 8px 16px;
   font: inherit;
   font-size: 14px;
   cursor: pointer;
@@ -551,56 +560,64 @@ body {
   margin-left: 4px;
 }
 
-/* --- page tray ----------------------------------------------------------- */
+/* --- Document Review (page tray) --------------------------------------- */
 
+/* The tray scrolls the page thumbnails. It is the only part of the tray
+   view that grows — everything else (name field, settings, dock) is fixed. */
 .tray {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
-  padding: 16px;
-  align-content: start;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
+/* Each tray item: full-width card showing the page at its natural aspect
+   ratio so the user sees a real document preview, not a cropped thumbnail. */
 .tray-item {
   position: relative;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--surface);
+  flex: 0 0 auto;
 }
 
 .tray-item img {
   width: 100%;
   height: auto;
   display: block;
+  /* Natural aspect ratio — the scan is a document, not a square card */
 }
 
 .tray-item .n {
   position: absolute;
-  top: 6px;
-  left: 6px;
+  top: 8px;
+  left: 8px;
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
   border-radius: 999px;
-  min-width: 22px;
-  height: 22px;
+  min-width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
-  font-size: 12px;
-  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0 8px;
 }
 
 .tray-item .ocr-flag {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   background: rgba(0, 0, 0, 0.65);
   color: var(--good);
   border-radius: 999px;
   font-size: 11px;
-  padding: 3px 7px;
+  padding: 3px 8px;
 }
 
 .tray-tools {
@@ -616,7 +633,7 @@ body {
   color: var(--ink-dim);
   font: inherit;
   font-size: 16px;
-  padding: 8px 0;
+  padding: 10px 0;
   cursor: pointer;
 }
 
@@ -629,8 +646,106 @@ body {
   opacity: 0.3;
 }
 
+/* "Add another page" row between the tray and the settings */
+.tray-add-row {
+  flex: 0 0 auto;
+  padding: 8px 16px 0;
+}
+
+.tray-add-btn {
+  width: 100%;
+  max-width: none;
+  flex: none;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+/* Settings panel — collapsed by default, doesn't push the dock off screen */
+.tray-settings-pad {
+  flex: 0 0 auto;
+}
+
+/* --- cloud save --------------------------------------------------------- */
+
+.cloud-save-body {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cloud-info-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 14px 16px;
+  margin-top: 8px;
+}
+
+.cloud-info-box p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+
+.cloud-info-box p:last-child {
+  margin-bottom: 0;
+}
+
+.cloud-info-box strong {
+  color: var(--ink);
+}
+
+.cloud-status-msg {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin: 6px 0 0;
+}
+
+.upload-progress-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  padding: 20px 16px;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.upload-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.upload-bar-track {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  height: 10px;
+  margin-bottom: 10px;
+}
+
+.upload-bar-fill {
+  background: var(--accent);
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  transition: width 0.15s ease;
+}
+
+.upload-pct {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- saved document ----------------------------------------------------- */
+
 .doc-pages {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
   padding: 12px 16px;
   display: grid;
