@@ -1182,6 +1182,7 @@ async function openCloudSave(blob, title, id, kept, filename) {
   $('btn-cloud-save').disabled = false;
   $('btn-cloud-save').hidden = false;
   $('btn-cloud-download').disabled = false;
+  $('btn-cloud-back-success').hidden = true;
   
   show('cloud-save');
   
@@ -1304,6 +1305,7 @@ async function onCloudSaveClick() {
     $('cloud-upload-title').textContent = '✓ Document saved';
     $('btn-cloud-save').hidden = true;
     $('btn-cloud-download').disabled = false;
+    $('btn-cloud-back-success').hidden = false;
   } catch (err) {
     $('cloud-upload-ui').hidden = true;
     $('cloud-storage-ui').hidden = false;
@@ -1475,6 +1477,19 @@ function wire() {
       if (button.dataset.back === 'library') await renderLibrary($('search').value.trim());
     });
   }
+  
+  function goBackToHcCloud() {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ type: 'SCANNER_DONE' }, 'https://hcdavecloud.in');
+      // Some browsers block programmatic focus, but we attempt it
+      try { window.opener.focus(); } catch (e) {}
+    } else {
+      window.location.href = 'https://hcdavecloud.in';
+    }
+  }
+
+  $('btn-back-hc-cloud')?.addEventListener('click', goBackToHcCloud);
+  $('btn-cloud-back-success')?.addEventListener('click', goBackToHcCloud);
 
   $('btn-about').addEventListener('click', showAbout);
 
