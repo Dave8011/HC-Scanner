@@ -24,13 +24,8 @@ window.addEventListener('message', (event) => {
     
     if (event.data.token) {
       hcAuthToken = event.data.token;
-      // Update UI proactively if tray is visible
-      const btnSave = document.getElementById('btn-save');
-      const btnSaveLocal = document.getElementById('btn-save-local');
-      if (btnSave && btnSaveLocal) {
-        btnSave.textContent = 'Save to HC Cloud';
-        btnSaveLocal.hidden = false;
-      }
+      // Proactively update UI state class
+      document.body.classList.add('auth-ok');
       
       const trayCloudHint = document.getElementById('tray-cloud-hint');
       if (trayCloudHint) trayCloudHint.hidden = true;

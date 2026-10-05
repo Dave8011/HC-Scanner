@@ -966,23 +966,13 @@ function renderTray() {
   const count = state.draft.length;
   $('tray-title').textContent = count === 1 ? '1 page' : `${count} pages`;
 
-  const hasAuth = hc.getAuthState();
-  const btnSave = $('btn-save');
-  const btnSaveLocal = $('btn-save-local');
-
-  if (hasAuth) {
-    // Authenticated: primary = Save to HC Cloud, secondary = Download Locally
-    btnSave.textContent = 'Save to HC Cloud';
-    btnSaveLocal.hidden = false;
-  } else {
-    // Standalone: primary = Save & export (local), hide the "Download Locally" ghost
-    // (it would be a confusing duplicate — both buttons do the same thing)
-    btnSave.textContent = 'Save & export';
-    btnSaveLocal.hidden = true;
+  if (hc.getAuthState()) {
+    document.body.classList.add('auth-ok');
   }
 
-  btnSave.disabled = count === 0;
-  btnSaveLocal.disabled = count === 0;
+  $('btn-save').disabled = count === 0;
+  $('btn-save-local').disabled = count === 0;
+  $('btn-save-local-auth').disabled = count === 0;
 
   state.draft.forEach((page, index) => {
     const item = document.createElement('div');
@@ -1059,6 +1049,7 @@ async function saveAndExport(skipCloud = false) {
 
   $('btn-save').disabled = true;
   $('btn-save-local').disabled = true;
+  $('btn-save-local-auth').disabled = true;
 
   const pending = state.draft.filter((p) => p.ocrPromise && !p.ocr && !p.ocrFailed);
   if (pending.length > 0) {
@@ -1166,6 +1157,7 @@ async function saveAndExport(skipCloud = false) {
     idle();
     $('btn-save').disabled = false;
     $('btn-save-local').disabled = false;
+    $('btn-save-local-auth').disabled = false;
     console.error('export failed', error);
     toast(t('export.failedKept'));
   }
@@ -1592,6 +1584,7 @@ function wire() {
   $('btn-save').addEventListener('click', () => saveAndExport(false));
   // Secondary: always download locally (only shown when authenticated)
   $('btn-save-local').addEventListener('click', () => saveAndExport(true));
+  $('btn-save-local-auth')?.addEventListener('click', () => saveAndExport(true));
   
   // HC Cloud Integration Events
   $('btn-cloud-back').addEventListener('click', openTray);

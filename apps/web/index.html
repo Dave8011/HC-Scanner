@@ -155,59 +155,60 @@
           <button class="text-btn" id="btn-tray-discard">Discard</button>
         </header>
 
-        <!-- Document name at the top -->
-        <div class="pad">
-          <label class="field">
-            <span>Document name</span>
-            <input type="text" id="doc-title" placeholder="Untitled scan" autocomplete="off" />
-          </label>
-        </div>
-
-        <!-- Page thumbnails scroll area -->
-        <div id="tray-list" class="tray"></div>
-
-        <!-- Add another page link -->
-        <div class="tray-add-row">
-          <button class="btn ghost tray-add-btn" id="btn-add-page">+ Add another page</button>
-        </div>
-
-        <!-- Export settings collapsed -->
-        <div class="pad tray-settings-pad">
-          <details class="settings">
-            <summary>Export settings</summary>
+        <div class="tray-scroll">
+          <!-- Document name at the top -->
+          <div class="pad">
             <label class="field">
-              <span>Page size</span>
-              <select id="opt-paper">
-                <option value="a4">A4</option>
-                <option value="letter">US Letter</option>
-                <option value="legal">US Legal</option>
-                <option value="original">Match the scan</option>
-              </select>
+              <span>Document name</span>
+              <input type="text" id="doc-title" placeholder="Untitled scan" autocomplete="off" />
             </label>
-            <label class="field">
-              <span>Image quality</span>
-              <select id="opt-quality">
-                <option value="70">Smaller file</option>
-                <option value="82" selected>Balanced</option>
-                <option value="95">Best quality</option>
-              </select>
-            </label>
-            <label class="check">
-              <input type="checkbox" id="opt-ocr" checked />
-              <span>
-                Recognise text (OCR)
-                <small id="ocr-state">Makes scans searchable and text selectable in the PDF.</small>
-              </span>
-            </label>
-          </details>
+          </div>
+
+          <!-- Page thumbnails scroll area -->
+          <div id="tray-list" class="tray-items"></div>
+
+          <!-- Add another page link -->
+          <div class="tray-add-row">
+            <button class="btn ghost tray-add-btn" id="btn-add-page">+ Add another page</button>
+          </div>
+
+          <!-- Export settings collapsed -->
+          <div class="pad tray-settings-pad">
+            <details class="settings">
+              <summary>Export settings</summary>
+              <label class="field">
+                <span>Page size</span>
+                <select id="opt-paper">
+                  <option value="a4">A4</option>
+                  <option value="letter">US Letter</option>
+                  <option value="legal">US Legal</option>
+                  <option value="original">Match the scan</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Image quality</span>
+                <select id="opt-quality">
+                  <option value="70">Smaller file</option>
+                  <option value="82" selected>Balanced</option>
+                  <option value="95">Best quality</option>
+                </select>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="opt-ocr" checked />
+                <span>
+                  Recognise text (OCR)
+                  <small id="ocr-state">Makes scans searchable and text selectable in the PDF.</small>
+                </span>
+              </label>
+            </details>
+          </div>
         </div>
 
-        <!-- Save actions: adjusted dynamically by renderTray() -->
+        <!-- Save actions: sticky dock -->
         <div class="dock">
-          <!-- btn-save-local: shown only when NOT authenticated (standalone mode) -->
-          <!-- btn-save: "Save to HC Cloud" when auth, "Save & export" when standalone -->
-          <button class="btn ghost" id="btn-save-local">Download Locally</button>
-          <button class="btn primary" id="btn-save">Save &amp; export</button>
+          <button class="btn ghost auth-only" id="btn-save-local-auth">Download Locally</button>
+          <button class="btn primary standalone-only" id="btn-save-local">Download Locally</button>
+          <button class="btn primary auth-only" id="btn-save">Save to HC Cloud</button>
         </div>
       </section>
 
@@ -315,7 +316,7 @@
       </p>
       <dl id="about-facts"></dl>
       <p style="font-size: 0.85em; color: var(--text-muted, #888); text-align: center; margin-top: 1rem;">
-        Version: <span id="app-version">7aa1bcf</span>
+        Version: <span id="app-version">c958e1b</span>
       </p>
       <form method="dialog"><button class="btn primary">Close</button></form>
     </dialog>

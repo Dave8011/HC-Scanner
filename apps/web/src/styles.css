@@ -566,15 +566,32 @@ body {
 
 /* The tray scrolls the page thumbnails. It is the only part of the tray
    view that grows — everything else (name field, settings, dock) is fixed. */
-.tray {
+.tray-scroll {
   flex: 1 1 0;
-  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+}
+
+.tray-items {
   padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Auth state buttons */
+.auth-only {
+  display: none !important;
+}
+
+body.auth-ok .auth-only {
+  display: block !important;
+}
+
+body.auth-ok .standalone-only {
+  display: none !important;
 }
 
 /* Each tray item: full-width card showing the page at its natural aspect
