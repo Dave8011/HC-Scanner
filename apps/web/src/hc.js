@@ -43,10 +43,7 @@ const pingInterval = setInterval(() => {
   
   pingCount++;
   if (window.opener) {
-    const targetOrigin = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-      ? 'http://localhost:3000'
-      : 'https://hcdavecloud.in';
-    window.opener.postMessage({ type: 'SCANNER_READY' }, targetOrigin);
+    window.opener.postMessage({ type: 'SCANNER_READY' }, '*');
   } else {
     clearInterval(pingInterval);
   }

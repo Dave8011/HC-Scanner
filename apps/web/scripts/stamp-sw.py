@@ -11,9 +11,13 @@ def main():
 
     sha = os.environ.get('CF_PAGES_COMMIT_SHA')
     if not sha:
-        import hashlib
-        import time
-        sha = hashlib.sha1(str(time.time()).encode()).hexdigest()
+        import subprocess
+        try:
+            sha = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+        except Exception:
+            import hashlib
+            import time
+            sha = hashlib.sha1(str(time.time()).encode()).hexdigest()
 
     short_sha = sha[:7]
     version = f"hc-{short_sha}"

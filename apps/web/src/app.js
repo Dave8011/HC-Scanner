@@ -1469,7 +1469,7 @@ function wire() {
   
   function goBackToHcCloud() {
     if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'SCANNER_DONE' }, 'https://hcdavecloud.in');
+      window.opener.postMessage({ type: 'SCANNER_DONE' }, '*');
       // Some browsers block programmatic focus, but we attempt it
       try { window.opener.focus(); } catch (e) {}
       window.close();
