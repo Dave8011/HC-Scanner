@@ -31,6 +31,7 @@
     <header class="bar" id="dev-bar">
       <button class="btn ghost" id="btn-back-hc-cloud" style="padding-left: 0;">← Back to HC Cloud</button>
       <span class="wordmark" style="margin-left: auto;"><span class="prefix">HC</span> Scanner<span class="dot">.</span></span>
+      <span style="font-size: 0.65rem; align-self: flex-end; padding-bottom: 4px; margin-left: 6px; color: var(--text-muted); opacity: 0.7;">v-<span id="app-version-nav">c4f8a8f</span></span>
     </header>
 
     <!-- app:begin -->
@@ -206,9 +207,8 @@
 
         <!-- Save actions: sticky dock -->
         <div class="dock">
-          <button class="btn ghost auth-only" id="btn-save-local-auth">Download Locally</button>
-          <button class="btn primary standalone-only" id="btn-save-local">Download Locally</button>
-          <button class="btn primary auth-only" id="btn-save">Save to HC Cloud</button>
+          <button class="btn ghost" id="btn-save-local">Download Locally</button>
+          <button class="btn primary" id="btn-save">Save to HC Cloud</button>
         </div>
       </section>
 
@@ -316,7 +316,7 @@
       </p>
       <dl id="about-facts"></dl>
       <p style="font-size: 0.85em; color: var(--text-muted, #888); text-align: center; margin-top: 1rem;">
-        Version: <span id="app-version">c958e1b</span>
+        Version: <span id="app-version">c4f8a8f</span>
       </p>
       <form method="dialog"><button class="btn primary">Close</button></form>
     </dialog>

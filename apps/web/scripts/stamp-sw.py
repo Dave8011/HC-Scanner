@@ -33,6 +33,7 @@ def main():
             idx_content = f.read()
         
         idx_content = re.sub(r'<span id="app-version">[^<]+</span>', f'<span id="app-version">{short_sha}</span>', idx_content)
+        idx_content = re.sub(r'<span id="app-version-nav">[^<]+</span>', f'<span id="app-version-nav">{short_sha}</span>', idx_content)
         with open(index_path, 'w') as f:
             f.write(idx_content)
         print(f"Stamped index.html with version {short_sha}")

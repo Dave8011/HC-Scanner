@@ -972,7 +972,6 @@ function renderTray() {
 
   $('btn-save').disabled = count === 0;
   $('btn-save-local').disabled = count === 0;
-  $('btn-save-local-auth').disabled = count === 0;
 
   state.draft.forEach((page, index) => {
     const item = document.createElement('div');
@@ -1049,7 +1048,6 @@ async function saveAndExport(skipCloud = false) {
 
   $('btn-save').disabled = true;
   $('btn-save-local').disabled = true;
-  $('btn-save-local-auth').disabled = true;
 
   const pending = state.draft.filter((p) => p.ocrPromise && !p.ocr && !p.ocrFailed);
   if (pending.length > 0) {
@@ -1144,7 +1142,7 @@ async function saveAndExport(skipCloud = false) {
       await renderLibrary();
     }
 
-    if (skipCloud === true || !hc.getAuthState()) {
+    if (skipCloud === true) {
       // Just download locally.
       await offerFile(fileBlob, filename);
       if (kept) await openDocument(id);
@@ -1157,7 +1155,6 @@ async function saveAndExport(skipCloud = false) {
     idle();
     $('btn-save').disabled = false;
     $('btn-save-local').disabled = false;
-    $('btn-save-local-auth').disabled = false;
     console.error('export failed', error);
     toast(t('export.failedKept'));
   }
@@ -1475,6 +1472,7 @@ function wire() {
       window.opener.postMessage({ type: 'SCANNER_DONE' }, 'https://hcdavecloud.in');
       // Some browsers block programmatic focus, but we attempt it
       try { window.opener.focus(); } catch (e) {}
+      window.close();
     } else {
       window.location.href = 'https://hcdavecloud.in';
     }
@@ -1582,9 +1580,8 @@ function wire() {
   });
   // Primary save button: goes to HC Cloud if authenticated, else downloads locally
   $('btn-save').addEventListener('click', () => saveAndExport(false));
-  // Secondary: always download locally (only shown when authenticated)
+  // Secondary: always download locally
   $('btn-save-local').addEventListener('click', () => saveAndExport(true));
-  $('btn-save-local-auth')?.addEventListener('click', () => saveAndExport(true));
   
   // HC Cloud Integration Events
   $('btn-cloud-back').addEventListener('click', openTray);
@@ -1669,6 +1666,17 @@ async function main() {
   await Promise.all([renderLibrary(), renderNotices()]);
 
   if ('serviceWorker' in navigator) {
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      if (state.view === 'library') {
+        window.location.reload();
+      } else {
+        toast('A new version is available. Please reload the page when finished.', 8000);
+      }
+    });
+
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
       reg.update();
     }).catch((error) => {
