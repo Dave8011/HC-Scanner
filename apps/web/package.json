@@ -4,7 +4,7 @@
   "type": "module",
   "description": "HC Scanner as a local-only web app. Ships no runtime dependencies — everything below is for building and testing only.",
   "scripts": {
-    "build": "./scripts/build-wasm.sh",
+    "build": "python3 scripts/stamp-sw.py && ./scripts/build-wasm.sh",
     "serve": "python3 scripts/serve-lan.py --plain",
     "serve:lan": "python3 scripts/serve-lan.py",
     "test": "node e2e/scan.spec.mjs",

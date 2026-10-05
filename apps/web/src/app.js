@@ -1491,7 +1491,7 @@ function wire() {
   $('btn-back-hc-cloud')?.addEventListener('click', goBackToHcCloud);
   $('btn-cloud-back-success')?.addEventListener('click', goBackToHcCloud);
 
-  $('btn-about').addEventListener('click', showAbout);
+  $('btn-about')?.addEventListener('click', showAbout);
 
   let searchTimer = null;
   $('search').addEventListener('input', (event) => {
@@ -1676,7 +1676,9 @@ async function main() {
   await Promise.all([renderLibrary(), renderNotices()]);
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch((error) => {
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
+      reg.update();
+    }).catch((error) => {
       // Offline support is a bonus, not a prerequisite — the app works
       // without it, so a failed registration is logged and dropped.
       console.warn('offline support unavailable:', error);

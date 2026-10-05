@@ -7,7 +7,7 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'hc-rebrand-v2';
+const VERSION = 'hc-7aa1bcf';
 const SHELL_CACHE = `hcscanner-shell-${VERSION}`;
 const ASSET_CACHE = `hcscanner-assets-${VERSION}`;
 
@@ -190,22 +190,31 @@ self.addEventListener('fetch', (event) => {
 });
 
 async function serve(request) {
-  const cached = await caches.match(request, { ignoreSearch: true });
-  if (cached) return cached;
+  const url = new URL(request.url);
+  const isImmutable = url.pathname.endsWith('.wasm') || 
+                      url.pathname.endsWith('.woff2') || 
+                      url.pathname.endsWith('.gz') ||
+                      OCR_ASSETS.some(p => url.pathname.endsWith(p.replace('./', '')));
 
+  // Cache-first for large immutable assets
+  if (isImmutable) {
+    const cached = await caches.match(request, { ignoreSearch: true });
+    if (cached) return cached;
+  }
+
+  // Network-first for mutable shell and everything else
   try {
     const response = await fetch(request);
-    // Only complete, successful, same-origin responses are worth keeping.
-    // Caching an opaque or partial response is how an app ends up serving
-    // a truncated WASM module from cache forever.
     if (response.ok && response.type === 'basic') {
-      const cache = await caches.open(ASSET_CACHE);
+      const cache = await caches.open(isImmutable ? ASSET_CACHE : SHELL_CACHE);
       cache.put(request, response.clone());
     }
     return response;
   } catch (error) {
-    // Offline and not cached. For a navigation that means the app shell,
-    // which is always cached, so the app still opens.
+    // Offline and not cached (or network failed). Try cache.
+    const cached = await caches.match(request, { ignoreSearch: true });
+    if (cached) return cached;
+
     if (request.mode === 'navigate') {
       const shell = await caches.match('index.html');
       if (shell) return shell;
