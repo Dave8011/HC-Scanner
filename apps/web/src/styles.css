@@ -106,6 +106,66 @@ body {
   flex: 0 0 auto;
 }
 
+#dev-bar {
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.back-cloud-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  min-height: 36px;
+  flex: 0 0 auto;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.back-cloud-btn:hover {
+  background: color-mix(in oklab, var(--surface-2) 80%, var(--accent));
+  border-color: color-mix(in oklab, var(--line) 50%, var(--accent));
+  color: var(--accent);
+  transform: translateX(-1px);
+}
+
+.cloud-back-icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.back-cloud-btn:hover .cloud-back-icon {
+  transform: translateX(-2px);
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-tag {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+}
+
 /* `h2` as well as `h1`: these are the app's own screen titles, sharing a
    document with the marketing page's `h1`. Seven `h1`s left the page with no
    outline at all for a screen reader or a crawler. The type is unchanged;
@@ -507,6 +567,68 @@ body {
   border-bottom-right-radius: 12px;
 }
 
+.hud-reticle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.hud-reticle::before,
+.hud-reticle::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.hud-reticle::before {
+  top: 50%;
+  left: -6px;
+  right: -6px;
+  height: 1px;
+  transform: translateY(-50%);
+}
+
+.hud-reticle::after {
+  left: 50%;
+  top: -6px;
+  bottom: -6px;
+  width: 1px;
+  transform: translateX(-50%);
+}
+
+.hud-scan-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent, #00d084), #38ef7d, transparent);
+  box-shadow: 0 0 12px 2px rgba(0, 208, 132, 0.65);
+  top: 10%;
+  pointer-events: none;
+  animation: scanBeamAnim 2.8s ease-in-out infinite;
+}
+
+@keyframes scanBeamAnim {
+  0% {
+    top: 8%;
+    opacity: 0.2;
+  }
+  50% {
+    top: 88%;
+    opacity: 0.85;
+  }
+  100% {
+    top: 8%;
+    opacity: 0.2;
+  }
+}
+
 /* --- filter controls ---------------------------------------------------- */
 
 .controls {
@@ -569,6 +691,12 @@ body {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 0 12px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 208, 132, 0.18);
 }
 
 .search-icon {
@@ -631,6 +759,13 @@ body {
   color: inherit;
   display: flex;
   flex-direction: column;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  border-color: color-mix(in oklab, var(--line) 60%, var(--accent));
 }
 
 .card img {
@@ -673,6 +808,20 @@ body {
   color: var(--ink-dim);
 }
 
+.empty-graphic {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.empty-svg {
+  width: 64px;
+  height: 64px;
+  color: var(--ink-dim);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.08));
+}
+
 .empty h2 {
   margin: 0;
   font-size: 17px;
@@ -681,7 +830,28 @@ body {
 .empty p {
   margin: 0;
   color: var(--ink-dim);
-  max-width: 34ch;
+  max-width: 36ch;
+}
+
+.empty-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.feature-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--ink-dim);
+  letter-spacing: 0.01em;
 }
 
 .notice {
@@ -904,8 +1074,9 @@ body.auth-ok .standalone-only {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface-2);
-  padding: 14px 16px;
+  padding: 18px 18px;
   margin-top: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
 }
 
 .cloud-info-box p {

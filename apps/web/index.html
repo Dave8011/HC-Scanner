@@ -30,9 +30,18 @@
          real header carries them and this bar is left behind, because it sits
          outside the markers. -->
     <header class="bar" id="dev-bar">
-      <button class="btn ghost" id="btn-back-hc-cloud" style="padding-left: 0;">← Back to HC Cloud</button>
-      <span class="wordmark" style="margin-left: auto;"><span class="prefix">HC</span> Scanner<span class="dot">.</span></span>
-      <span style="font-size: 0.65rem; align-self: flex-end; padding-bottom: 4px; margin-left: 6px; color: var(--text-muted); opacity: 0.7;">v-<span id="app-version-nav">b6ecafa</span></span>
+      <button class="btn ghost back-cloud-btn" id="btn-back-hc-cloud">
+        <svg class="cloud-back-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 13a3.5 3.5 0 0 0-1-6.85 5 5 0 0 0-9.4 1.85A3.5 3.5 0 0 0 5 15h9a3 3 0 0 0 1-2z"/>
+          <polyline points="7 10 4 7 7 4"/>
+          <line x1="4" y1="7" x2="11" y2="7"/>
+        </svg>
+        <span>Back to HC Cloud</span>
+      </button>
+      <div class="brand-wrap">
+        <span class="wordmark"><span class="prefix">HC</span> Scanner<span class="dot">.</span></span>
+        <span class="version-tag">v-<span id="app-version-nav">9fbeb56</span></span>
+      </div>
     </header>
 
     <!-- app:begin -->
@@ -64,12 +73,26 @@
         <div id="library-grid" class="grid"></div>
 
         <div class="empty" id="library-empty" hidden>
-          <div class="empty-mark" aria-hidden="true">▤</div>
-          <h2>Nothing scanned yet</h2>
+          <div class="empty-graphic" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none" class="empty-svg" stroke="currentColor">
+              <rect x="14" y="8" width="36" height="48" rx="5" stroke-width="2.5" stroke-dasharray="3 3"/>
+              <rect x="10" y="14" width="44" height="40" rx="5" fill="currentColor" fill-opacity="0.08" stroke-width="2"/>
+              <line x1="18" y1="24" x2="38" y2="24" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="18" y1="32" x2="46" y2="32" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="18" y1="40" x2="32" y2="40" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="44" cy="42" r="10" fill="var(--surface-2)" stroke="var(--accent)" stroke-width="2.5"/>
+              <path d="M41 42l2 2 4-4" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h2>No documents scanned yet</h2>
           <p>
-            Everything you scan stays in this browser on this device. No sign-up, no upload, no
-            watermark, no page limit.
+            Capture physical pages or import existing PDFs &amp; images. Everything runs 100% on this device.
           </p>
+          <div class="empty-badges">
+            <span class="feature-tag">🔒 Private &amp; Local</span>
+            <span class="feature-tag">⚡ Fast WASM Core</span>
+            <span class="feature-tag">📄 Universal PDF &amp; JPG</span>
+          </div>
         </div>
 
         <div class="dock">
@@ -98,6 +121,8 @@
             <div class="hud-corner top-right"></div>
             <div class="hud-corner bottom-left"></div>
             <div class="hud-corner bottom-right"></div>
+            <div class="hud-reticle"></div>
+            <div class="hud-scan-beam"></div>
           </div>
           <p class="stage-note" id="capture-note">Point at a document</p>
         </div>
@@ -340,7 +365,7 @@
       </p>
       <dl id="about-facts"></dl>
       <p style="font-size: 0.85em; color: var(--text-muted, #888); text-align: center; margin-top: 1rem;">
-        Version: <span id="app-version">b6ecafa</span>
+        Version: <span id="app-version">9fbeb56</span>
       </p>
       <form method="dialog"><button class="btn primary">Close</button></form>
     </dialog>

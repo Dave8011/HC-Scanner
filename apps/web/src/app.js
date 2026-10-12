@@ -483,22 +483,29 @@ async function capture() {
     toast(t('camera.notReady'));
     return;
   }
-  // Visual shutter snap feedback
+
+  // 1. Instantly capture the exact frame at the exact moment of the shutter tap!
+  // At t=0ms, the camera is still pointing steadily at the document before the hand moves.
+  const frame = imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
+  noteCapture('instant', video.videoWidth, video.videoHeight, frame.width, frame.height);
+
+  // 2. Immediate visual shutter snap feedback
   const stage = $('capture-stage');
   if (stage) {
     stage.classList.add('shutter-flash');
-    setTimeout(() => stage.classList.remove('shutter-flash'), 220);
+    setTimeout(() => stage.classList.remove('shutter-flash'), 240);
   }
-  busy(t('crop.detecting') || 'Analyzing document…');
-  await paint();
-  let frame = await stillFromCamera();
-  if (!frame) {
-    frame = imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
-    noteCapture('frame', video.videoWidth, video.videoHeight, frame.width, frame.height);
+
+  // 3. Pause video stream immediately so the viewfinder display is frozen
+  // and no subsequent motion/hand movement can blur or displace the capture.
+  try { video.pause(); } catch (e) {}
+  if (state.liveLoop) {
+    cancelAnimationFrame(state.liveLoop);
+    state.liveLoop = null;
   }
+
   state.documentKind = 'scan';
   await openCrop(frame);
-  idle();
 }
 
 /// What the last press of the shutter actually produced.
@@ -691,20 +698,30 @@ async function openCrop(frame) {
   buffer.height = height;
   buffer.getContext('2d').putImageData(frame, 0, 0);
 
-  await hold('crop', frame);
-  const detected = await detectQuad({ slot: 'crop' });
-
+  // Initialize crop state and immediately render canvas with initial quad
+  // so the user sees their captured document without any lag or blocking scrim.
   state.crop = {
-    // Only the size: the pixels are in the worker, and every reader below
-    // this point wants the dimensions rather than the buffer.
     frame: { width, height },
     buffer,
-    corners: detected ?? insetQuad(width, height),
+    corners: insetQuad(width, height),
     dragging: -1,
   };
   show('crop');
   drawCrop();
-  if (!detected) toast(t('crop.noOutline'));
+
+  // Run quad detection in WebAssembly worker and smoothly snap corners into place
+  try {
+    await hold('crop', frame);
+    const detected = await detectQuad({ slot: 'crop' });
+    if (detected && state.crop && state.view === 'crop') {
+      state.crop.corners = detected;
+      drawCrop();
+    } else if (!detected && state.view === 'crop') {
+      toast(t('crop.noOutline'));
+    }
+  } catch (err) {
+    console.warn('quad detection error', err);
+  }
 }
 
 // A quad set in from the frame's edges, used when detection finds nothing.
@@ -767,18 +784,34 @@ function drawCrop() {
   ctx.beginPath();
   points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
   ctx.closePath();
-  ctx.strokeStyle = '#4c8dff';
-  ctx.lineWidth = 2 * dpr;
+  ctx.strokeStyle = '#00d084';
+  ctx.lineWidth = 2.5 * dpr;
+  ctx.shadowColor = 'rgba(0, 208, 132, 0.4)';
+  ctx.shadowBlur = 8 * dpr;
   ctx.stroke();
+  ctx.shadowBlur = 0; // reset shadow
 
-  for (const p of points) {
+  // Render sleek tactile corner handles
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    const isDragging = state.crop && state.crop.dragging === i;
+
+    // Outer glow halo
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 11 * dpr, 0, Math.PI * 2);
-    ctx.fillStyle = '#4c8dff';
+    ctx.arc(p.x, p.y, (isDragging ? 18 : 14) * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = isDragging ? 'rgba(0, 208, 132, 0.4)' : 'rgba(0, 208, 132, 0.2)';
     ctx.fill();
+
+    // Solid accent ring
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 4.5 * dpr, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff';
+    ctx.arc(p.x, p.y, (isDragging ? 12 : 10) * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = '#00d084';
+    ctx.fill();
+
+    // Crisp inner core
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, (isDragging ? 5.5 : 4.5) * dpr, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
     ctx.fill();
   }
 }
