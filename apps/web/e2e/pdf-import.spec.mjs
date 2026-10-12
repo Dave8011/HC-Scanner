@@ -1,93 +1,95 @@
-// Test PDF generation and re-importing into HC-Scanner using genuine PDF blob
+import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
-import { strict as assert } from 'node:assert';
 
-const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:8765';
+const origin = process.env.BASE_URL || 'http://127.0.0.1:8765';
 
 const browser = await chromium.launch({
   headless: true,
-  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  args: ['--no-sandbox', '--disable-setuid-sandbox']
 });
 
-const page = await browser.newPage();
-page.on('console', msg => console.log('BROWSER:', msg.type(), msg.text()));
-page.on('pageerror', err => console.log('PAGE ERROR:', err));
-await page.goto(`${BASE}/index.html`);
-await page.waitForTimeout(1000);
+try {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true
+  });
+  const page = await context.newPage();
 
-console.log('1. Generating a valid PDF in browser using exportPdf...');
-const pdfGenerated = await page.evaluate(async () => {
-  const { exportPdf } = await import('./src/scanner.js');
-  
-  // Make a sample canvas page
-  const canvas = document.createElement('canvas');
-  canvas.width = 600;
-  canvas.height = 800;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, 600, 800);
-  ctx.fillStyle = '#111827';
-  ctx.font = '24px sans-serif';
-  ctx.fillText('Sample Invoice PDF', 50, 100);
-  ctx.fillText('Amount: $120.00', 50, 150);
+  await page.goto(`${origin}/index.html`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('#view-library');
 
-  const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', 0.9));
-  const pages = [{
-    id: 'p1',
-    index: 0,
-    blob,
-    thumb: blob,
-    width: 600,
-    height: 800,
-  }];
+  console.log('1. Generating a valid PDF in browser using exportPdf...');
+  const pdfGenerated = await page.evaluate(async () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 600;
+    canvas.height = 800;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 600, 800);
+    ctx.fillStyle = '#111827';
+    ctx.font = '24px sans-serif';
+    ctx.fillText('HC Scanner PDF Import Test', 50, 80);
+    ctx.fillText('Invoice #998822', 50, 130);
+    ctx.fillText('Total Paid: $1,250.00', 50, 180);
 
-  const pdfBlob = await exportPdf(pages, { paper: 'a4', margin: 18, quality: 82, title: 'Test Document' });
-  window._generatedPdfBlob = pdfBlob;
-  return { size: pdfBlob.size, type: pdfBlob.type };
-});
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+    const pages = [{
+      blob,
+      filter: 'enhance',
+      rotation: 0,
+      aspect: 600 / 800,
+      ocr: null
+    }];
 
-console.log('  ok   Generated PDF:', pdfGenerated);
-assert.ok(pdfGenerated.size > 0, 'PDF should have positive size');
+    const { exportPdf } = await import('./src/scanner.js');
+    const pdfBlob = await exportPdf(pages, { paper: 'a4', quality: 0.82 });
+    window._generatedPdfBlob = pdfBlob;
+    return { size: pdfBlob.size, type: pdfBlob.type };
+  });
 
-console.log('2. Verifying offline renderPdfPages engine...');
-const renderResult = await page.evaluate(async () => {
-  const { renderPdfPages } = await import('./src/pdf-import.js');
-  const pages = await renderPdfPages(window._generatedPdfBlob, 1600);
-  return { success: true, count: pages.length, width: pages[0]?.width, height: pages[0]?.height };
-});
-assert.equal(renderResult.count, 1, 'PDF rendered 1 page');
-assert.ok(renderResult.width > 0 && renderResult.height > 0, 'Page has valid dimensions');
-console.log('  ok   Offline PDF rendering engine verified');
+  console.log('  ok   Generated PDF:', pdfGenerated);
+  assert.ok(pdfGenerated.size > 0, 'PDF should have positive size');
 
-console.log('3. Importing PDF via UI file picker into HC-Scanner...');
-await page.evaluate(() => {
-  const file = new File([window._generatedPdfBlob], 'invoice.pdf', { type: 'application/pdf' });
-  const input = document.getElementById('file-input');
-  const dt = new DataTransfer();
-  dt.items.add(file);
-  input.files = dt.files;
-  input.dispatchEvent(new Event('change', { bubbles: true }));
-});
+  console.log('2. Verifying offline renderPdfPages engine...');
+  const renderResult = await page.evaluate(async () => {
+    const { renderPdfPages } = await import('./src/pdf-import.js');
+    const pages = await renderPdfPages(window._generatedPdfBlob, 1600);
+    return { success: true, count: pages.length, width: pages[0]?.width, height: pages[0]?.height };
+  });
+  assert.equal(renderResult.count, 1, 'PDF rendered 1 page');
+  assert.ok(renderResult.width > 0 && renderResult.height > 0, 'Page has valid dimensions');
+  console.log('  ok   Offline PDF rendering engine verified');
 
-// Single-page PDF routes to corner editor (view-crop)
-await page.waitForSelector('#view-crop:not([hidden])', { timeout: 15000 });
-console.log('  ok   PDF page successfully routed to Crop view!');
+  console.log('3. Importing PDF via UI file picker into HC-Scanner...');
+  await page.evaluate(() => {
+    const file = new File([window._generatedPdfBlob], 'invoice.pdf', { type: 'application/pdf' });
+    const input = document.getElementById('file-input');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  });
 
-// Confirm crop and continue
-await page.click('#btn-crop-confirm');
-await page.waitForSelector('#view-filter:not([hidden])', { timeout: 15000 });
-console.log('  ok   PDF arrived at Filter view');
+  // PDF import choice modal should appear!
+  await page.waitForSelector('#modal-pdf-import[open]', { timeout: 10000 });
+  console.log('  ok   PDF import choice modal opened successfully!');
 
-await page.click('#btn-filter-confirm');
-await page.waitForSelector('#view-tray:not([hidden])', { timeout: 15000 });
-console.log('  ok   PDF page arrived in Review Tray!');
+  // Select "Upload As It Is" (recommended uncropped flow)
+  await page.click('#btn-pdf-import-asis');
 
-const pageCount = await page.evaluate(() => document.querySelectorAll('#tray-list .tray-item').length);
-assert.equal(pageCount, 1, 'Tray should have 1 page from the imported PDF');
+  // Should navigate straight to Review Tray without destructive cropping!
+  await page.waitForSelector('#view-tray:not([hidden])', { timeout: 15000 });
+  console.log('  ok   PDF page arrived in Review Tray as-is without cropping!');
 
-const title = await page.inputValue('#doc-title');
-console.log('  ok   Tray doc title:', title);
-assert.ok(title.endsWith('.pdf'), 'Imported PDF defaults to .pdf format');
+  const pageCount = await page.evaluate(() => document.querySelectorAll('#tray-list .tray-item').length);
+  assert.equal(pageCount, 1, 'Tray should have 1 page from the imported PDF');
 
-console.log('\nSUCCESS: PDF import verified completely end-to-end!');
-await browser.close();
+  const title = await page.inputValue('#doc-title');
+  console.log('  ok   Tray doc title:', title);
+  assert.ok(title.endsWith('.pdf'), 'Imported PDF defaults to .pdf format');
+
+  console.log('\nSUCCESS: PDF import verified completely end-to-end!');
+} finally {
+  await browser.close();
+}

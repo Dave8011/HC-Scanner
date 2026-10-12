@@ -106,11 +106,36 @@ body {
   flex: 0 0 auto;
 }
 
+#library-bar,
 #dev-bar {
   justify-content: space-between;
-  padding: 10px 16px;
-  background: var(--surface);
+  padding: calc(10px + var(--safe-t)) 14px 10px;
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--line);
+  z-index: 10;
+}
+
+.about-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-dim);
+  font-size: 15px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex: 0 0 auto;
+}
+
+.about-btn:hover {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--line) 50%, var(--accent));
+  background: color-mix(in oklab, var(--surface-2) 80%, var(--accent));
 }
 
 .back-cloud-btn {
@@ -314,6 +339,16 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.btn-icon {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
 }
 
 .btn.primary {
@@ -683,25 +718,32 @@ body {
 
 /* --- library ------------------------------------------------------------ */
 
+.search-container {
+  padding: 14px 16px 4px;
+}
+
 .search {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 0 12px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  border-radius: 999px;
+  padding: 0 14px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
 }
 
 .search:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(0, 208, 132, 0.18);
+  background: var(--surface);
+  box-shadow: 0 0 0 3.5px rgba(0, 208, 132, 0.18), 0 3px 12px rgba(0, 0, 0, 0.06);
 }
 
 .search-icon {
-  color: var(--ink-dim);
-  font-size: 17px;
+  color: var(--accent);
+  font-size: 18px;
+  opacity: 0.85;
 }
 
 .search input {
@@ -1354,4 +1396,212 @@ dialog dd {
     border-left: 1px solid var(--line);
     border-right: 1px solid var(--line);
   }
+}
+
+/* --- Review Tray Title Card --------------------------------------------- */
+.tray-title-pad {
+  padding: 14px 16px 2px;
+}
+
+.title-field-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.title-field-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 208, 132, 0.15);
+  background: var(--surface);
+}
+
+.title-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-dim);
+}
+
+.title-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-pen-icon {
+  width: 15px;
+  height: 15px;
+  color: var(--ink-dim);
+  flex-shrink: 0;
+}
+
+.title-input-wrap input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 2px 0;
+}
+
+/* --- PDF Import Choice Modal -------------------------------------------- */
+.pdf-modal {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  max-width: min(92vw, 440px);
+  border-radius: calc(var(--radius) + 4px);
+}
+
+.pdf-modal::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.pdf-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--radius) + 4px);
+  padding: 24px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pdf-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pdf-icon-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--accent) 15%, var(--surface-2));
+  border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.pdf-doc-svg {
+  width: 22px;
+  height: 22px;
+}
+
+.pdf-modal-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.pdf-modal-sub {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+}
+
+.pdf-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pdf-choice-btn {
+  position: relative;
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  color: var(--ink);
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdf-choice-btn:hover {
+  border-color: color-mix(in oklab, var(--line) 50%, var(--accent));
+  background: color-mix(in oklab, var(--surface-2) 80%, var(--accent));
+  transform: translateY(-1.5px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.pdf-choice-btn.is-recommended {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--line));
+  background: color-mix(in oklab, var(--surface-2) 90%, var(--accent));
+  box-shadow: 0 3px 12px rgba(0, 208, 132, 0.12);
+}
+
+.pdf-choice-btn.is-recommended:hover {
+  border-color: var(--accent);
+  box-shadow: 0 6px 18px rgba(0, 208, 132, 0.22);
+}
+
+.choice-tag {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  margin-bottom: 2px;
+}
+
+.choice-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.choice-emoji {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.choice-text strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 2px;
+}
+
+.choice-text small {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-dim);
+  line-height: 1.4;
+}
+
+.pdf-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-cancel-pdf {
+  font-size: 13.5px;
+  min-height: 40px;
+  padding: 8px 16px;
+  flex: 0 0 auto;
 }

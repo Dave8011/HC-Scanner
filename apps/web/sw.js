@@ -7,7 +7,7 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'hc-9fbeb56';
+const VERSION = 'hc-71592e4';
 const SHELL_CACHE = `hcscanner-shell-${VERSION}`;
 const ASSET_CACHE = `hcscanner-assets-${VERSION}`;
 

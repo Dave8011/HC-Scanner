@@ -561,6 +561,92 @@ function pickFiles(target) {
   $('file-input').click();
 }
 
+function promptPdfImportMode(file, pdfPages) {
+  return new Promise((resolve) => {
+    const dialog = $('modal-pdf-import');
+    if (!dialog) {
+      resolve('as-is');
+      return;
+    }
+    const info = $('pdf-import-info');
+    if (info) {
+      info.textContent = `${file.name} • ${pdfPages.length} ${pdfPages.length === 1 ? 'page' : 'pages'}`;
+    }
+
+    const btnAsIs = $('btn-pdf-import-asis');
+    const btnCrop = $('btn-pdf-import-crop');
+    const btnCancel = $('btn-pdf-import-cancel');
+
+    function cleanup() {
+      btnAsIs?.removeEventListener('click', onAsIs);
+      btnCrop?.removeEventListener('click', onCrop);
+      btnCancel?.removeEventListener('click', onCancel);
+      dialog.removeEventListener('cancel', onCancel);
+      try { dialog.close(); } catch (e) {}
+    }
+
+    function onAsIs() {
+      cleanup();
+      resolve('as-is');
+    }
+
+    function onCrop() {
+      cleanup();
+      resolve('crop');
+    }
+
+    function onCancel() {
+      cleanup();
+      resolve('cancel');
+    }
+
+    btnAsIs?.addEventListener('click', onAsIs);
+    btnCrop?.addEventListener('click', onCrop);
+    btnCancel?.addEventListener('click', onCancel);
+    dialog.addEventListener('cancel', onCancel);
+
+    try {
+      dialog.showModal();
+    } catch (e) {
+      // In environments where showModal is unhandled, resolve as-is
+      resolve('as-is');
+    }
+  });
+}
+
+async function importPdfAsIs(pdfPages) {
+  state.documentKind = 'pdf';
+  state.documentOriginalType = 'application/pdf';
+  if (!state.exportFormatUserChosen) state.exportFormat = 'pdf';
+
+  busy(`Importing ${pdfPages.length} ${pdfPages.length === 1 ? 'page' : 'pages'}…`);
+  await paint();
+  let added = 0;
+  for (const [index, page] of pdfPages.entries()) {
+    $('busy-label').textContent = `Importing page ${index + 1} of ${pdfPages.length}…`;
+    await paint();
+    try {
+      const { width, height } = page;
+      await hold('import', page.imageData);
+      // As-is: Use fullFrameQuad! 100% full original uncropped page.
+      const quad = fullFrameQuad(width, height);
+      const rectified = await rectify({ slot: 'import' }, quad, PAGE_MAX_EDGE);
+      // Keep 'original' filter so digital PDF graphics/colors are not altered
+      await addPage(rectified, 'original', 0);
+      added += 1;
+    } catch (err) {
+      console.error('Failed to import PDF page as-is', err);
+    } finally {
+      await release('import');
+    }
+  }
+  idle();
+  if (added > 0) {
+    toast(`Imported ${added} ${added === 1 ? 'page' : 'pages'} (full original pages)`);
+    openTray();
+  }
+}
+
 async function onFilesPicked(files) {
   const allFiles = Array.from(files);
   const pdfFiles = allFiles.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
@@ -583,16 +669,28 @@ async function onFilesPicked(files) {
         return;
       }
 
+      // Prompt user: Upload As-Is vs Adjust Corners & Crop
+      const choice = await promptPdfImportMode(pdfFiles[0], pdfPages);
+      if (choice === 'cancel') {
+        return;
+      }
+
+      if (choice === 'as-is') {
+        await importPdfAsIs(pdfPages);
+        return;
+      }
+
+      // User chose to crop / adjust corners:
+      state.documentKind = 'pdf';
+      state.documentOriginalType = 'application/pdf';
+      if (!state.exportFormatUserChosen) state.exportFormat = 'pdf';
+
       if (pdfPages.length === 1 && imageFiles.length === 0) {
-        state.documentKind = 'pdf';
-        state.documentOriginalType = 'application/pdf';
-        if (!state.exportFormatUserChosen) state.exportFormat = 'pdf';
         await openCrop(pdfPages[0].imageData);
         return;
       }
 
-      state.documentKind = 'scan';
-      if (!state.exportFormatUserChosen) state.exportFormat = 'pdf';
+      // Multi-page crop:
       busy(`Importing ${pdfPages.length} pages…`);
       await paint();
       let added = 0;
@@ -698,29 +796,32 @@ async function openCrop(frame) {
   buffer.height = height;
   buffer.getContext('2d').putImageData(frame, 0, 0);
 
-  // Initialize crop state and immediately render canvas with initial quad
-  // so the user sees their captured document without any lag or blocking scrim.
+  // Initialize crop state and render canvas.
+  // For PDF, default to fullFrameQuad so nothing gets clipped off.
+  // For camera photos, default to insetQuad with tactile corner handles.
   state.crop = {
     frame: { width, height },
     buffer,
-    corners: insetQuad(width, height),
+    corners: state.documentKind === 'pdf' ? fullFrameQuad(width, height) : insetQuad(width, height),
     dragging: -1,
   };
   show('crop');
   drawCrop();
 
-  // Run quad detection in WebAssembly worker and smoothly snap corners into place
-  try {
-    await hold('crop', frame);
-    const detected = await detectQuad({ slot: 'crop' });
-    if (detected && state.crop && state.view === 'crop') {
-      state.crop.corners = detected;
-      drawCrop();
-    } else if (!detected && state.view === 'crop') {
-      toast(t('crop.noOutline'));
+  // Run quad detection in WebAssembly worker (skip automatic clipping if PDF)
+  if (state.documentKind !== 'pdf') {
+    try {
+      await hold('crop', frame);
+      const detected = await detectQuad({ slot: 'crop' });
+      if (detected && state.crop && state.view === 'crop') {
+        state.crop.corners = detected;
+        drawCrop();
+      } else if (!detected && state.view === 'crop') {
+        toast(t('crop.noOutline'));
+      }
+    } catch (err) {
+      console.warn('quad detection error', err);
     }
-  } catch (err) {
-    console.warn('quad detection error', err);
   }
 }
 

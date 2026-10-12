@@ -18,11 +18,17 @@ try {
 
   await page.goto(`${origin}/index.html`, { waitUntil: 'domcontentloaded' });
 
-  // 1. Verify Header & Back to HC Cloud Button
+  // 1. Verify Library Bar & Back to HC Cloud Button inside view-library
+  const libBar = await page.$('#library-bar');
+  assert.ok(libBar, '#library-bar should exist inside view-library');
+
   const backCloudBtn = await page.$('#btn-back-hc-cloud');
-  assert.ok(backCloudBtn, '#btn-back-hc-cloud should exist in the header');
+  assert.ok(backCloudBtn, '#btn-back-hc-cloud should exist in the library bar');
   const backText = await page.$eval('#btn-back-hc-cloud', el => el.innerText.trim());
-  assert.ok(backText.includes('Back to HC Cloud'), 'Button should say Back to HC Cloud');
+  assert.ok(backText.includes('HC Cloud'), 'Button should say HC Cloud');
+
+  const aboutBtn = await page.$('#btn-about');
+  assert.ok(aboutBtn, '#btn-about should exist in the library bar');
 
   const brandTag = await page.$('.brand-wrap .version-tag');
   assert.ok(brandTag, 'Version tag in brand-wrap should exist');
@@ -42,9 +48,18 @@ try {
   assert.ok(featureTags.some(t => t.includes('WASM')), 'Tag should mention WASM');
   assert.ok(featureTags.some(t => t.includes('PDF')), 'Tag should mention PDF');
 
+  // 4. Verify PDF Import Choice Modal elements
+  const pdfModal = await page.$('#modal-pdf-import');
+  assert.ok(pdfModal, '#modal-pdf-import should exist');
+  const btnAsIs = await page.$('#btn-pdf-import-asis');
+  assert.ok(btnAsIs, '#btn-pdf-import-asis should exist');
+  const btnCrop = await page.$('#btn-pdf-import-crop');
+  assert.ok(btnCrop, '#btn-pdf-import-crop should exist');
+
   console.log('  ok   Header, Back to Cloud button, & Version Tag verified');
   console.log('  ok   Viewfinder HUD laser reticle & scan beam verified');
   console.log('  ok   Library Empty state graphics & privacy badges verified');
+  console.log('  ok   PDF Import Choice Modal verified');
   console.log('\nAll UI mastery and capture enhancements passed successfully!\n');
 } finally {
   await browser.close();
