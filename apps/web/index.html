@@ -21,6 +21,7 @@
     <link rel="stylesheet" href="tokens/css/fonts.css" />
     <!-- app-head -->
     <link rel="stylesheet" href="src/styles.css" />
+    <script src="vendor/pdfjs/pdf.min.js"></script>
     <script type="module" src="src/app.js"></script>
   </head>
   <body>
@@ -31,7 +32,7 @@
     <header class="bar" id="dev-bar">
       <button class="btn ghost" id="btn-back-hc-cloud" style="padding-left: 0;">← Back to HC Cloud</button>
       <span class="wordmark" style="margin-left: auto;"><span class="prefix">HC</span> Scanner<span class="dot">.</span></span>
-      <span style="font-size: 0.65rem; align-self: flex-end; padding-bottom: 4px; margin-left: 6px; color: var(--text-muted); opacity: 0.7;">v-<span id="app-version-nav">bac0f2f</span></span>
+      <span style="font-size: 0.65rem; align-self: flex-end; padding-bottom: 4px; margin-left: 6px; color: var(--text-muted); opacity: 0.7;">v-<span id="app-version-nav">b6ecafa</span></span>
     </header>
 
     <!-- app:begin -->
@@ -72,7 +73,7 @@
         </div>
 
         <div class="dock">
-          <button class="btn ghost" id="btn-import-library">Import images</button>
+          <button class="btn ghost" id="btn-import-library">Import document / image</button>
           <button class="btn primary" id="btn-new-scan">Scan</button>
         </div>
       </section>
@@ -82,12 +83,22 @@
         <header class="bar">
           <button class="icon-btn" data-back="library" aria-label="Back">←</button>
           <h2 id="capture-count">New document</h2>
+          <div class="camera-mode-pill" id="camera-mode-toggle" role="group" aria-label="Camera Mode">
+            <button type="button" class="mode-btn is-active" id="btn-mode-fast" data-mode="fast" title="Fast Capture: 60fps, detect upon capture">⚡ Fast</button>
+            <button type="button" class="mode-btn" id="btn-mode-live" data-mode="live" title="Live Edge: real-time edge tracking">🎯 Live</button>
+          </div>
           <button class="icon-btn" id="btn-flip" aria-label="Switch camera">⟳</button>
         </header>
 
         <div class="stage" id="capture-stage">
           <video id="video" playsinline muted autoplay></video>
           <canvas id="overlay" class="overlay"></canvas>
+          <div class="viewfinder-hud" id="viewfinder-hud" aria-hidden="true">
+            <div class="hud-corner top-left"></div>
+            <div class="hud-corner top-right"></div>
+            <div class="hud-corner bottom-left"></div>
+            <div class="hud-corner bottom-right"></div>
+          </div>
           <p class="stage-note" id="capture-note">Point at a document</p>
         </div>
 
@@ -171,6 +182,17 @@
           <!-- Add another page link -->
           <div class="tray-add-row">
             <button class="btn ghost tray-add-btn" id="btn-add-page">+ Add another page</button>
+          </div>
+
+          <!-- Export format selector -->
+          <div class="pad tray-format-pad">
+            <div class="format-selector">
+              <span class="format-label">Export format</span>
+              <div class="format-chips" role="group" aria-label="Export format">
+                <button type="button" class="format-chip is-on" id="opt-fmt-pdf" data-fmt="pdf">📄 PDF Document</button>
+                <button type="button" class="format-chip" id="opt-fmt-image" data-fmt="image">🖼️ Image (JPEG)</button>
+              </div>
+            </div>
           </div>
 
           <!-- Export settings collapsed -->
@@ -283,12 +305,13 @@
 
         <div class="dock">
           <button class="btn ghost" id="btn-doc-share">Share</button>
+          <button class="btn ghost" id="btn-doc-image">Save Image</button>
           <button class="btn primary" id="btn-doc-pdf">Save PDF</button>
         </div>
       </section>
     </div>
 
-    <input type="file" id="file-input" accept="image/*" multiple hidden />
+    <input type="file" id="file-input" accept="image/*,application/pdf,.pdf" multiple hidden />
 
     <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
@@ -317,7 +340,7 @@
       </p>
       <dl id="about-facts"></dl>
       <p style="font-size: 0.85em; color: var(--text-muted, #888); text-align: center; margin-top: 1rem;">
-        Version: <span id="app-version">bac0f2f</span>
+        Version: <span id="app-version">b6ecafa</span>
       </p>
       <form method="dialog"><button class="btn primary">Close</button></form>
     </dialog>

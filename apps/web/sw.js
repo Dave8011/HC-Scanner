@@ -7,7 +7,7 @@
 // by its marketing. If a future dependency ever tried to phone home, it
 // would fail loudly here instead of succeeding quietly.
 
-const VERSION = 'hc-bac0f2f';
+const VERSION = 'hc-b6ecafa';
 const SHELL_CACHE = `hcscanner-shell-${VERSION}`;
 const ASSET_CACHE = `hcscanner-assets-${VERSION}`;
 
@@ -34,6 +34,7 @@ const SHELL = [
   'src/styles.css',
   'src/site.css',
   'src/app.js',
+  'src/pdf-import.js',
   'src/hc.js',
   // app.js imports this at module scope, so a shell without it is not a
   // degraded offline app — it is one that throws before it renders.
@@ -47,6 +48,8 @@ const SHELL = [
   'src/ocr.js',
   'src/wasm/docscan.js',
   'src/wasm/docscan_bg.wasm',
+  'vendor/pdfjs/pdf.min.js',
+  'vendor/pdfjs/pdf.worker.min.js',
   'icons/icon.svg',
 ];
 

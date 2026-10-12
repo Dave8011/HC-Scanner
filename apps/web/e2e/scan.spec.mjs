@@ -303,7 +303,7 @@ function scanBundleForEndpoints() {
   // the second net, and it is here to catch a *new* host being added, not to
   // relitigate an anchor.
   const allowed =
-    /^(localhost|127\.0\.0\.1|(www\.)?w3\.org|schema\.org|(www\.)?example\.(com|org)|([a-z]+\.)?opendocscan\.com|github\.com|x\.com)$/;
+    /^(localhost|127\.0\.0\.1|(www\.)?w3\.org|schema\.org|(www\.)?example\.(com|org)|([a-z]+\.)?opendocscan\.com|([a-z]+\.)?hcdavecloud\.in|(www\.)?apache\.org|(www\.)?xfa\.org|([a-z]+\.)?adobe\.com|github\.com|x\.com)$/;
   const found = [];
 
   const walk = (relative) => {

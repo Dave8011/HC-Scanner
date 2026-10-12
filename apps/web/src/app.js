@@ -10,6 +10,7 @@ import { t, lang } from './i18n.js';
 import * as store from './store.js';
 import * as ocr from './ocr.js';
 import * as hc from './hc.js';
+import { renderPdfPages } from './pdf-import.js';
 import {
   initScanner,
   imageDataFrom,
@@ -87,6 +88,9 @@ const state = {
   documentKind: 'scan',
   importTarget: 'draft',
   objectUrls: new Set(),
+  cameraMode: 'fast',
+  exportFormat: 'pdf',
+  exportFormatUserChosen: false,
 };
 
 // --- small helpers ---------------------------------------------------------
@@ -405,12 +409,27 @@ function startLiveDetection() {
       overlay.height = rect.height;
     }
 
-    // Detection now runs in a worker, so this asks and moves on rather
-    // than waiting. `state.detecting` is what keeps the queue from
-    // growing: if a frame takes longer than the interval — which is
-    // exactly what happens on a slow phone, the case this all exists for —
-    // the next request is skipped rather than stacked behind it.
-    if (timestamp - state.detectAt > LIVE_DETECT_INTERVAL_MS && !state.detecting) {
+    // In Fast Capture mode, avoid expensive main-thread getImageData stalls completely.
+    // The camera preview runs at hardware-accelerated 60fps! Edge detection happens upon capture.
+    if (state.cameraMode === 'fast') {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      const note = $('capture-note');
+      if (note && !note.classList.contains('is-fast-mode')) {
+        note.textContent = t('capture.pointAt') || 'Point at a document & tap shutter';
+        note.classList.remove('is-locked');
+        note.classList.add('is-fast-mode');
+      }
+      return;
+    }
+
+    const note = $('capture-note');
+    if (note && note.classList.contains('is-fast-mode')) {
+      note.classList.remove('is-fast-mode');
+    }
+
+    // In Live mode, run detection with throttled interval to keep UI responsive
+    const LIVE_DETECT_INTERVAL_ADAPTIVE = 350;
+    if (timestamp - state.detectAt > LIVE_DETECT_INTERVAL_ADAPTIVE && !state.detecting) {
       state.detectAt = timestamp;
       state.detecting = true;
       const frame = imageDataFrom(video, video.videoWidth, video.videoHeight, LIVE_DETECT_EDGE);
@@ -429,9 +448,10 @@ function startLiveDetection() {
         })
         .finally(() => {
           state.detecting = false;
-          const note = $('capture-note');
-          note.textContent = t(state.liveQuad ? 'capture.pageFound' : 'capture.pointAt');
-          note.classList.toggle('is-locked', Boolean(state.liveQuad));
+          if (note && state.cameraMode === 'live') {
+            note.textContent = t(state.liveQuad ? 'capture.pageFound' : 'capture.pointAt');
+            note.classList.toggle('is-locked', Boolean(state.liveQuad));
+          }
         });
     }
 
@@ -463,6 +483,14 @@ async function capture() {
     toast(t('camera.notReady'));
     return;
   }
+  // Visual shutter snap feedback
+  const stage = $('capture-stage');
+  if (stage) {
+    stage.classList.add('shutter-flash');
+    setTimeout(() => stage.classList.remove('shutter-flash'), 220);
+  }
+  busy(t('crop.detecting') || 'Analyzing document…');
+  await paint();
   let frame = await stillFromCamera();
   if (!frame) {
     frame = imageDataFrom(video, video.videoWidth, video.videoHeight, CAPTURE_MAX_EDGE);
@@ -470,6 +498,7 @@ async function capture() {
   }
   state.documentKind = 'scan';
   await openCrop(frame);
+  idle();
 }
 
 /// What the last press of the shutter actually produced.
@@ -526,11 +555,72 @@ function pickFiles(target) {
 }
 
 async function onFilesPicked(files) {
-  const images = Array.from(files).filter((f) => f.type.startsWith('image/'));
-  if (images.length === 0) return;
+  const allFiles = Array.from(files);
+  const pdfFiles = allFiles.filter((f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+  const imageFiles = allFiles.filter((f) => f.type.startsWith('image/'));
 
-  // One image goes straight to the corner editor, the way a capture does.
-  // applied per image without stopping to ask.
+  if (pdfFiles.length === 0 && imageFiles.length === 0) return;
+
+  // Handle PDF document import
+  if (pdfFiles.length > 0) {
+    busy(t('import.opening') || 'Reading PDF document…');
+    await paint();
+    try {
+      const pdfPages = await renderPdfPages(pdfFiles[0], PAGE_MAX_EDGE, (idx, total) => {
+        $('busy-label').textContent = `Reading PDF page ${idx} of ${total}…`;
+      });
+      idle();
+
+      if (pdfPages.length === 0) {
+        toast('No readable pages found in this PDF');
+        return;
+      }
+
+      if (pdfPages.length === 1 && imageFiles.length === 0) {
+        state.documentKind = 'pdf';
+        state.documentOriginalType = 'application/pdf';
+        if (!state.exportFormatUserChosen) state.exportFormat = 'pdf';
+        await openCrop(pdfPages[0].imageData);
+        return;
+      }
+
+      state.documentKind = 'scan';
+      if (!state.exportFormatUserChosen) state.exportFormat = 'pdf';
+      busy(`Importing ${pdfPages.length} pages…`);
+      await paint();
+      let added = 0;
+      for (const [index, page] of pdfPages.entries()) {
+        $('busy-label').textContent = `Processing page ${index + 1} of ${pdfPages.length}…`;
+        await paint();
+        try {
+          const { width, height } = page;
+          await hold('import', page.imageData);
+          const quad = (await detectQuad({ slot: 'import' })) ?? fullFrameQuad(width, height);
+          const rectified = await rectify({ slot: 'import' }, quad, PAGE_MAX_EDGE);
+          await addPage(rectified, 'enhance', 0);
+          added += 1;
+        } catch (err) {
+          console.error('Failed to process PDF page', err);
+        } finally {
+          await release('import');
+        }
+      }
+      idle();
+      if (added > 0) {
+        toast(`Imported ${added} pages from PDF`);
+        openTray();
+      }
+      return;
+    } catch (err) {
+      idle();
+      console.error('PDF import error', err);
+      toast('Failed to import PDF document');
+      return;
+    }
+  }
+
+  // Handle image import (existing functionality preserved)
+  const images = imageFiles;
   if (images.length === 1) {
     busy(t('import.opening'));
     await paint();
@@ -539,6 +629,7 @@ async function onFilesPicked(files) {
       idle();
       state.documentKind = 'image';
       state.documentOriginalType = images[0].type;
+      if (!state.exportFormatUserChosen) state.exportFormat = 'image';
       await openCrop(frame);
     } catch {
       idle();
@@ -548,6 +639,7 @@ async function onFilesPicked(files) {
   }
 
   state.documentKind = 'scan';
+  if (!state.exportFormatUserChosen) state.exportFormat = 'pdf';
   busy(t('import.importing', { count: images.length }));
   await paint();
   let added = 0;
@@ -557,16 +649,13 @@ async function onFilesPicked(files) {
     try {
       const frame = await blobToImageData(file, PAGE_MAX_EDGE);
       const { width, height } = frame;
-      // Held rather than sent twice: detection and rectification both
-      // want these pixels, and at import sizes that is twenty megabytes
-      // that would otherwise cross the boundary a second time.
       await hold('import', frame);
       const quad = (await detectQuad({ slot: 'import' })) ?? fullFrameQuad(width, height);
       const page = await rectify({ slot: 'import' }, quad, PAGE_MAX_EDGE);
       await addPage(page, 'enhance', 0);
       added += 1;
     } catch {
-      /* Skip what cannot be read; the count reported below tells the truth. */
+      /* Skip what cannot be read */
     } finally {
       await release('import');
     }
@@ -954,8 +1043,38 @@ function updateTrayBadge() {
       : t('pages.count', { count: state.draft.length });
 }
 
+function setExportFormat(fmt) {
+  state.exportFormat = fmt;
+  state.exportFormatUserChosen = true;
+  const docTitleInput = $('doc-title');
+  if (docTitleInput) {
+    let current = docTitleInput.value.trim();
+    if (current) {
+      current = current.replace(/\.(pdf|jpe?g|png|webp|gif)$/i, '');
+      docTitleInput.value = `${current}.${fmt === 'image' ? 'jpg' : 'pdf'}`;
+    }
+  }
+  const fmtPdf = $('opt-fmt-pdf');
+  const fmtImage = $('opt-fmt-image');
+  if (fmtPdf && fmtImage) {
+    fmtPdf.classList.toggle('is-on', fmt === 'pdf');
+    fmtImage.classList.toggle('is-on', fmt === 'image');
+  }
+  const settingsPad = document.querySelector('.tray-settings-pad');
+  if (settingsPad) {
+    settingsPad.style.opacity = fmt === 'image' ? '0.7' : '1';
+  }
+}
+
 function openTray() {
   show('tray');
+  if (!state.exportFormatUserChosen) {
+    state.exportFormat = (state.draft.length === 1 && state.documentKind === 'image') ? 'image' : 'pdf';
+  }
+  const docTitleInput = $('doc-title');
+  if (docTitleInput && !docTitleInput.value) {
+    docTitleInput.value = `Scan_${new Date().toISOString().slice(0, 10)}.${state.exportFormat === 'image' ? 'jpg' : 'pdf'}`;
+  }
   renderTray();
 }
 
@@ -972,6 +1091,13 @@ function renderTray() {
 
   $('btn-save').disabled = count === 0;
   $('btn-save-local').disabled = count === 0;
+
+  const fmtPdf = $('opt-fmt-pdf');
+  const fmtImage = $('opt-fmt-image');
+  if (fmtPdf && fmtImage) {
+    fmtPdf.classList.toggle('is-on', state.exportFormat === 'pdf');
+    fmtImage.classList.toggle('is-on', state.exportFormat === 'image');
+  }
 
   state.draft.forEach((page, index) => {
     const item = document.createElement('div');
@@ -1085,26 +1211,38 @@ async function saveAndExport(skipCloud = false) {
       text: page.text,
     }));
 
-    const isImageExport = state.draft.length === 1 && state.documentKind === 'image';
+    const isImage = state.exportFormat === 'image';
     let fileBlob;
     let filename;
-    
-    if (isImageExport) {
-      fileBlob = state.draft[0].blob;
-      let ext = 'jpg';
-      if (fileBlob.type === 'image/png') ext = 'png';
-      else if (fileBlob.type === 'image/webp') ext = 'webp';
-      else if (fileBlob.type === 'image/gif') ext = 'gif';
-      
-      filename = `${safeFileName(title)}.${ext}`;
+    const baseTitle = title.replace(/\.(pdf|jpe?g|png|webp|gif)$/i, '');
+
+    if (isImage) {
+      if (state.draft.length === 1) {
+        fileBlob = state.draft[0].blob;
+        let ext = 'jpg';
+        if (fileBlob.type === 'image/png') ext = 'png';
+        else if (fileBlob.type === 'image/webp') ext = 'webp';
+        filename = `${safeFileName(baseTitle)}.${ext}`;
+      } else {
+        fileBlob = state.draft[0].blob;
+        filename = `${safeFileName(baseTitle)}.jpg`;
+        // If downloading locally, trigger sequential downloads for remaining pages
+        if (skipCloud && state.draft.length > 1) {
+          setTimeout(async () => {
+            for (let i = 1; i < state.draft.length; i++) {
+              await offerFile(state.draft[i].blob, `${safeFileName(baseTitle)}_page_${i + 1}.jpg`);
+            }
+          }, 600);
+        }
+      }
     } else {
       fileBlob = await exportPdf(pages, {
         paper: $('opt-paper').value,
         margin: $('opt-paper').value === 'original' ? 0 : 18,
         quality: Number($('opt-quality').value),
-        title,
+        title: baseTitle,
       });
-      filename = `${safeFileName(title)}.pdf`;
+      filename = `${safeFileName(baseTitle)}.pdf`;
     }
 
     // Attempted before the file is offered, so a share sheet dismissed or a
@@ -1142,7 +1280,7 @@ async function saveAndExport(skipCloud = false) {
       await renderLibrary();
     }
 
-    if (skipCloud === true) {
+    if (skipCloud === true || !hc.getAuthState()) {
       // Just download locally.
       await offerFile(fileBlob, filename);
       if (kept) await openDocument(id);
@@ -1392,7 +1530,8 @@ async function exportOpenDoc(share) {
       title: doc.title,
     });
     idle();
-    const filename = `${safeFileName(doc.title)}.pdf`;
+    const baseTitle = doc.title.replace(/\.(pdf|jpe?g|png|webp|gif)$/i, '');
+    const filename = `${safeFileName(baseTitle)}.pdf`;
     if (share) await offerFile(pdf, filename);
     else {
       const url = URL.createObjectURL(pdf);
@@ -1406,6 +1545,30 @@ async function exportOpenDoc(share) {
     idle();
     console.error('export failed', error);
     toast(t('export.failed'));
+  }
+}
+
+async function exportOpenDocImages() {
+  if (!state.openDoc) return;
+  const { doc, pages } = state.openDoc;
+  if (!pages || pages.length === 0) return;
+  const baseTitle = doc.title.replace(/\.(pdf|jpe?g|png|webp|gif)$/i, '');
+  busy('Exporting image…');
+  await paint();
+  try {
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const filename = pages.length === 1
+        ? `${safeFileName(baseTitle)}.jpg`
+        : `${safeFileName(baseTitle)}_page_${i + 1}.jpg`;
+      await offerFile(page.blob, filename);
+    }
+    idle();
+    toast(pages.length === 1 ? 'Image saved' : `${pages.length} images saved`);
+  } catch (err) {
+    idle();
+    console.error('Image export failed', err);
+    toast('Image export failed');
   }
 }
 
@@ -1605,8 +1768,40 @@ function wire() {
   $('opt-paper').addEventListener('change', (e) => store.setSetting('paper', e.target.value));
   $('opt-quality').addEventListener('change', (e) => store.setSetting('quality', e.target.value));
 
+  // Export format toggle
+  $('opt-fmt-pdf')?.addEventListener('click', () => setExportFormat('pdf'));
+  $('opt-fmt-image')?.addEventListener('click', () => setExportFormat('image'));
+
+  // Camera Mode Toggle
+  $('btn-mode-fast')?.addEventListener('click', () => {
+    state.cameraMode = 'fast';
+    $('btn-mode-fast')?.classList.add('is-active');
+    $('btn-mode-live')?.classList.remove('is-active');
+    state.liveQuad = null;
+    const overlay = $('overlay');
+    if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+    const note = $('capture-note');
+    if (note) {
+      note.textContent = t('capture.pointAt') || 'Point at a document & tap shutter';
+      note.classList.remove('is-locked');
+      note.classList.add('is-fast-mode');
+    }
+  });
+
+  $('btn-mode-live')?.addEventListener('click', () => {
+    state.cameraMode = 'live';
+    $('btn-mode-live')?.classList.add('is-active');
+    $('btn-mode-fast')?.classList.remove('is-active');
+    const note = $('capture-note');
+    if (note) {
+      note.classList.remove('is-fast-mode');
+      note.textContent = t('capture.pointAt');
+    }
+  });
+
   $('btn-doc-share').addEventListener('click', () => exportOpenDoc(true));
   $('btn-doc-pdf').addEventListener('click', () => exportOpenDoc(false));
+  $('btn-doc-image')?.addEventListener('click', exportOpenDocImages);
   $('btn-doc-delete').addEventListener('click', async () => {
     if (!state.openDoc) return;
     if (!confirm(t('library.deleteConfirm', { title: state.openDoc.doc.title }))) return;
