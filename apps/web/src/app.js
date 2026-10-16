@@ -1765,13 +1765,21 @@ function wire() {
   }
   
   function goBackToHcCloud() {
+    const targetUrl = hc.getCloudUrl();
     if (window.opener && !window.opener.closed) {
-      window.opener.postMessage({ type: 'SCANNER_DONE' }, '*');
-      // Some browsers block programmatic focus, but we attempt it
-      try { window.opener.focus(); } catch (e) {}
+      try {
+        window.opener.postMessage({ type: 'SCANNER_DONE' }, '*');
+        window.opener.focus();
+      } catch (e) {}
       window.close();
+      // If the browser blocks window.close() (e.g. tab was refreshed), redirect cleanly
+      setTimeout(() => {
+        if (!window.closed) {
+          window.location.href = targetUrl;
+        }
+      }, 350);
     } else {
-      window.location.href = 'https://hcdavecloud.in';
+      window.location.href = targetUrl;
     }
   }
 

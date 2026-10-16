@@ -4,6 +4,95 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
 
 let hcAuthToken = null;
 
+// Restore token if previously authorized in this session (e.g. across user reload)
+try {
+  const cachedToken = sessionStorage.getItem('hc_auth_token');
+  if (cachedToken) {
+    hcAuthToken = cachedToken;
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.classList.add('auth-ok');
+      const trayCloudHint = document.getElementById('tray-cloud-hint');
+      if (trayCloudHint) trayCloudHint.hidden = true;
+    });
+    if (document.body) {
+      document.body.classList.add('auth-ok');
+      const trayCloudHint = document.getElementById('tray-cloud-hint');
+      if (trayCloudHint) trayCloudHint.hidden = true;
+    }
+  }
+} catch (_) {}
+
+/**
+ * Normalizes and validates an HC Cloud URL, ensuring it redirects to HC Cloud Drive
+ * (e.g. drive.hcdavecloud.in) and never to the unrouted apex domain (hcdavecloud.in).
+ */
+export function sanitizeCloudUrl(url) {
+  const defaultUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:3000'
+    : 'https://drive.hcdavecloud.in';
+
+  if (!url || typeof url !== 'string') {
+    return defaultUrl;
+  }
+
+  try {
+    const u = new URL(url.trim());
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') {
+      return defaultUrl;
+    }
+    // Normalize apex domain or www to drive.hcdavecloud.in
+    if (u.hostname === 'hcdavecloud.in' || u.hostname === 'www.hcdavecloud.in') {
+      u.hostname = 'drive.hcdavecloud.in';
+    }
+    const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+    const isHcCloud = u.hostname === 'drive.hcdavecloud.in' || u.hostname.endsWith('.hcdavecloud.in');
+    if (!isLocal && !isHcCloud) {
+      return defaultUrl;
+    }
+    return u.toString();
+  } catch (_) {
+    return defaultUrl;
+  }
+}
+
+/**
+ * Determines the target HC Cloud return URL.
+ * Checks URL parameters, cached return URL in storage, referrer, or defaults to drive.hcdavecloud.in.
+ */
+export function getCloudUrl() {
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const qUrl = urlParams.get('returnUrl') || urlParams.get('cloudUrl');
+    if (qUrl) {
+      const clean = sanitizeCloudUrl(qUrl);
+      try { localStorage.setItem('hc_cloud_return_url', clean); } catch (_) {}
+      return clean;
+    }
+
+    const saved = localStorage.getItem('hc_cloud_return_url');
+    if (saved) {
+      const clean = sanitizeCloudUrl(saved);
+      // Auto-repair if the saved value in localStorage was pointing to the apex domain
+      if (clean !== saved) {
+        try { localStorage.setItem('hc_cloud_return_url', clean); } catch (_) {}
+      }
+      return clean;
+    }
+
+    if (document.referrer) {
+      const ref = sanitizeCloudUrl(document.referrer);
+      if (document.referrer.includes('hcdavecloud.in') || document.referrer.includes('localhost:3000')) {
+        try { localStorage.setItem('hc_cloud_return_url', ref); } catch (_) {}
+        return ref;
+      }
+    }
+  } catch (_) {}
+
+  return (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:3000'
+    : 'https://drive.hcdavecloud.in';
+}
+
 // Handshake listener
 window.addEventListener('message', (event) => {
   if (event.data?.type === 'AUTH_TOKEN') {
@@ -24,6 +113,14 @@ window.addEventListener('message', (event) => {
     
     if (event.data.token) {
       hcAuthToken = event.data.token;
+      try { sessionStorage.setItem('hc_auth_token', event.data.token); } catch (_) {}
+
+      const rawCandidate = event.data.returnUrl || (event.origin && event.origin !== 'null' ? event.origin : null);
+      if (rawCandidate) {
+        const clean = sanitizeCloudUrl(rawCandidate);
+        try { localStorage.setItem('hc_cloud_return_url', clean); } catch (_) {}
+      }
+
       // Proactively update UI state class
       document.body.classList.add('auth-ok');
       
