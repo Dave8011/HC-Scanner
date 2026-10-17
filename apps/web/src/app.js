@@ -288,6 +288,8 @@ async function renderLibrary(query = '') {
     meta.append(title, sub);
     card.append(meta);
 
+    const cardTitle = doc.title || t('library.untitled');
+    card.setAttribute('aria-label', `${cardTitle}, ${pages}`);
     card.addEventListener('click', () => openDocument(doc.id));
     grid.append(card);
   }
@@ -377,12 +379,24 @@ async function startCamera() {
 
   video.srcObject = state.camera;
   await video.play().catch(() => {});
-  startLiveDetection();
+  if (state.cameraMode === 'live') {
+    startLiveDetection();
+  } else {
+    const overlay = $('overlay');
+    if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
+    const note = $('capture-note');
+    if (note) {
+      note.textContent = t('capture.pointAt') || 'Point at a document & tap shutter';
+      note.classList.add('is-fast-mode');
+    }
+  }
 }
 
 function stopCamera() {
-  cancelAnimationFrame(state.liveLoop);
-  state.liveLoop = null;
+  if (state.liveLoop) {
+    cancelAnimationFrame(state.liveLoop);
+    state.liveLoop = null;
+  }
   state.liveQuad = null;
   if (state.camera) {
     for (const track of state.camera.getTracks()) track.stop();
@@ -393,12 +407,19 @@ function stopCamera() {
 }
 
 function startLiveDetection() {
+  if (state.liveLoop) {
+    cancelAnimationFrame(state.liveLoop);
+    state.liveLoop = null;
+  }
   const video = $('video');
   const overlay = $('overlay');
   const ctx = overlay.getContext('2d');
 
   const step = (timestamp) => {
-    if (!state.camera || state.view !== 'capture') return;
+    if (!state.camera || state.view !== 'capture' || state.cameraMode !== 'live') {
+      state.liveLoop = null;
+      return;
+    }
     state.liveLoop = requestAnimationFrame(step);
 
     if (!video.videoWidth) return;
@@ -407,19 +428,6 @@ function startLiveDetection() {
     if (overlay.width !== rect.width || overlay.height !== rect.height) {
       overlay.width = rect.width;
       overlay.height = rect.height;
-    }
-
-    // In Fast Capture mode, avoid expensive main-thread getImageData stalls completely.
-    // The camera preview runs at hardware-accelerated 60fps! Edge detection happens upon capture.
-    if (state.cameraMode === 'fast') {
-      ctx.clearRect(0, 0, overlay.width, overlay.height);
-      const note = $('capture-note');
-      if (note && !note.classList.contains('is-fast-mode')) {
-        note.textContent = t('capture.pointAt') || 'Point at a document & tap shutter';
-        note.classList.remove('is-locked');
-        note.classList.add('is-fast-mode');
-      }
-      return;
     }
 
     const note = $('capture-note');
@@ -437,8 +445,6 @@ function startLiveDetection() {
 
       detectQuad(frame)
         .then((quad) => {
-          // Corners come back in the downscaled frame's space; normalise
-          // to 0..1 so drawing does not have to know what size that was.
           state.liveQuad = quad
             ? quad.map((c) => ({ x: c.x / frameWidth, y: c.y / frameHeight }))
             : null;
@@ -482,6 +488,13 @@ async function capture() {
   if (!video.videoWidth) {
     toast(t('camera.notReady'));
     return;
+  }
+
+  // Tactile haptic feedback for physical shutter feel
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate([15, 30]);
+    } catch (_) {}
   }
 
   // 1. Instantly capture the exact frame at the exact moment of the shutter tap!
@@ -582,7 +595,12 @@ function promptPdfImportMode(file, pdfPages) {
       btnCrop?.removeEventListener('click', onCrop);
       btnCancel?.removeEventListener('click', onCancel);
       dialog.removeEventListener('cancel', onCancel);
+      dialog.removeEventListener('click', onBackdrop);
       try { dialog.close(); } catch (e) {}
+    }
+
+    function onBackdrop(e) {
+      if (e.target === dialog) onCancel();
     }
 
     function onAsIs() {
@@ -604,6 +622,7 @@ function promptPdfImportMode(file, pdfPages) {
     btnCrop?.addEventListener('click', onCrop);
     btnCancel?.addEventListener('click', onCancel);
     dialog.addEventListener('cancel', onCancel);
+    dialog.addEventListener('click', onBackdrop);
 
     try {
       dialog.showModal();
@@ -1017,7 +1036,9 @@ async function openFilter(page) {
     rotation: 0,
   };
   for (const chip of document.querySelectorAll('.chip')) {
-    chip.classList.toggle('is-on', chip.dataset.filter === 'enhance');
+    const isOn = chip.dataset.filter === 'enhance';
+    chip.classList.toggle('is-on', isOn);
+    chip.setAttribute('aria-pressed', isOn ? 'true' : 'false');
   }
   $('brightness').value = '0';
   $('brightness-out').textContent = '0';
@@ -1193,6 +1214,8 @@ function setExportFormat(fmt) {
   if (fmtPdf && fmtImage) {
     fmtPdf.classList.toggle('is-on', fmt === 'pdf');
     fmtImage.classList.toggle('is-on', fmt === 'image');
+    fmtPdf.setAttribute('aria-pressed', fmt === 'pdf' ? 'true' : 'false');
+    fmtImage.setAttribute('aria-pressed', fmt === 'image' ? 'true' : 'false');
   }
   const settingsPad = document.querySelector('.tray-settings-pad');
   if (settingsPad) {
@@ -1231,6 +1254,8 @@ function renderTray() {
   if (fmtPdf && fmtImage) {
     fmtPdf.classList.toggle('is-on', state.exportFormat === 'pdf');
     fmtImage.classList.toggle('is-on', state.exportFormat === 'image');
+    fmtPdf.setAttribute('aria-pressed', state.exportFormat === 'pdf' ? 'true' : 'false');
+    fmtImage.setAttribute('aria-pressed', state.exportFormat === 'image' ? 'true' : 'false');
   }
 
   state.draft.forEach((page, index) => {
@@ -1263,6 +1288,7 @@ function renderTray() {
     left.type = 'button';
     left.textContent = '←';
     left.title = t('tray.moveEarlier');
+    left.setAttribute('aria-label', t('tray.moveEarlier') || 'Move page earlier');
     left.disabled = index === 0;
     left.addEventListener('click', () => movePage(index, -1));
 
@@ -1270,6 +1296,7 @@ function renderTray() {
     right.type = 'button';
     right.textContent = '→';
     right.title = t('tray.moveLater');
+    right.setAttribute('aria-label', t('tray.moveLater') || 'Move page later');
     right.disabled = index === state.draft.length - 1;
     right.addEventListener('click', () => movePage(index, 1));
 
@@ -1277,6 +1304,7 @@ function renderTray() {
     remove.type = 'button';
     remove.textContent = '✕';
     remove.title = t('tray.deletePage');
+    remove.setAttribute('aria-label', t('tray.deletePage') || 'Delete page');
     remove.addEventListener('click', () => {
       state.draft.splice(index, 1);
       updateTrayBadge();
@@ -1807,6 +1835,9 @@ function wire() {
 
   $('btn-shutter').addEventListener('click', capture);
   $('btn-flip').addEventListener('click', async () => {
+    const flipBtn = $('btn-flip');
+    flipBtn?.classList.add('is-spinning');
+    setTimeout(() => flipBtn?.classList.remove('is-spinning'), 400);
     state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
     await startCamera();
   });
@@ -1836,8 +1867,12 @@ function wire() {
 
   for (const chip of document.querySelectorAll('.chip')) {
     chip.addEventListener('click', () => {
-      for (const other of document.querySelectorAll('.chip')) other.classList.remove('is-on');
+      for (const other of document.querySelectorAll('.chip')) {
+        other.classList.remove('is-on');
+        other.setAttribute('aria-pressed', 'false');
+      }
       chip.classList.add('is-on');
+      chip.setAttribute('aria-pressed', 'true');
       state.filter.name = chip.dataset.filter;
       void renderFilter();
     });
@@ -1919,6 +1954,12 @@ function wire() {
     state.cameraMode = 'fast';
     $('btn-mode-fast')?.classList.add('is-active');
     $('btn-mode-live')?.classList.remove('is-active');
+    $('btn-mode-fast')?.setAttribute('aria-pressed', 'true');
+    $('btn-mode-live')?.setAttribute('aria-pressed', 'false');
+    if (state.liveLoop) {
+      cancelAnimationFrame(state.liveLoop);
+      state.liveLoop = null;
+    }
     state.liveQuad = null;
     const overlay = $('overlay');
     if (overlay) overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
@@ -1934,10 +1975,15 @@ function wire() {
     state.cameraMode = 'live';
     $('btn-mode-live')?.classList.add('is-active');
     $('btn-mode-fast')?.classList.remove('is-active');
+    $('btn-mode-live')?.setAttribute('aria-pressed', 'true');
+    $('btn-mode-fast')?.setAttribute('aria-pressed', 'false');
     const note = $('capture-note');
     if (note) {
       note.classList.remove('is-fast-mode');
       note.textContent = t('capture.pointAt');
+    }
+    if (!state.liveLoop && state.camera) {
+      startLiveDetection();
     }
   });
 
@@ -1967,6 +2013,62 @@ function wire() {
   document.addEventListener('visibilitychange', async () => {
     if (document.hidden) stopCamera();
     else if (state.view === 'capture') await startCamera();
+  });
+
+  // Backdrop click dismiss for About modal
+  $('about')?.addEventListener('click', (event) => {
+    if (event.target === $('about')) $('about').close();
+  });
+
+  // Accessible keyboard shortcuts across scanner views
+  window.addEventListener('keydown', (event) => {
+    const active = document.activeElement;
+    const isEditingText =
+      active &&
+      (active.tagName === 'INPUT' ||
+        active.tagName === 'TEXTAREA' ||
+        active.tagName === 'SELECT');
+
+    if (event.code === 'Escape') {
+      if (isEditingText) return;
+      if (state.view === 'capture') {
+        event.preventDefault();
+        show('library');
+        void renderLibrary($('search')?.value.trim() || '');
+      } else if (state.view === 'crop') {
+        event.preventDefault();
+        $('btn-crop-cancel')?.click();
+      } else if (state.view === 'filter') {
+        event.preventDefault();
+        $('btn-filter-back')?.click();
+      } else if (state.view === 'tray') {
+        event.preventDefault();
+        $('btn-tray-back')?.click();
+      } else if (state.view === 'doc') {
+        event.preventDefault();
+        show('library');
+      } else if (state.view === 'cloud-save') {
+        event.preventDefault();
+        $('btn-cloud-back')?.click();
+      }
+      return;
+    }
+
+    if (event.code === 'Space' || event.code === 'Enter') {
+      if (isEditingText || (active && active.tagName === 'BUTTON')) {
+        return;
+      }
+      if (state.view === 'capture') {
+        event.preventDefault();
+        capture();
+      } else if (state.view === 'crop' && event.code === 'Enter') {
+        event.preventDefault();
+        $('btn-crop-confirm')?.click();
+      } else if (state.view === 'filter' && event.code === 'Enter') {
+        event.preventDefault();
+        $('btn-filter-confirm')?.click();
+      }
+    }
   });
 }
 
